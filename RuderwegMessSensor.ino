@@ -3,10 +3,15 @@
 #include <ESP8266WebServer.h>
 #include "Wire.h" // This library allows you to communicate with I2C devices.
 #include "html_page.h"
-#define WM_VERSION "V0.10"
+// !! create a file "myWifiSettings" with the following content:
+//   #define MY_WIFI_SSID "<SSID>"
+//   #define MY_WIFI_PASSWORD "<CREDENTIALS>"
+#include "myWifiSettings.h"
+#define WM_VERSION "V0.11"
 
 // Version history
 // V0.10 : full functional initial version
+// V0.11 : use wifi data from private header file
 
 /**
  * \file winkelmesser.ino
@@ -31,8 +36,8 @@ static double ourTaraAngle = 0;
 static double ourRudderDepth = 30;
 
 // WiFi network settings
-const char* ssid = "<SSID>";
-const char* password = "<PASSWORD>";
+const char* ssid = MY_WIFI_SSID;
+const char* password = MY_WIFI_PASSWORD;
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
