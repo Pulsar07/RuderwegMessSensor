@@ -7,11 +7,19 @@
 //   #define MY_WIFI_SSID "<SSID>"
 //   #define MY_WIFI_PASSWORD "<CREDENTIALS>"
 #include "myWifiSettings.h"
-#define WM_VERSION "V0.11"
+#define WM_VERSION "V0.12"
+
+// #define SUPPORT_MMA8451
+#define SUPPORT_MPU6050
+
+#ifdef SUPPORT_MMA8451
+#include <Adafruit_MMA8451.h>         // MMA8451 library
+#endif
 
 // Version history
 // V0.10 : full functional initial version
 // V0.11 : use wifi data from private header file
+// V0.12 : support for MMA8451 added (no test HW available)
 
 /**
  * \file winkelmesser.ino
@@ -26,8 +34,14 @@
  *
  */
 
+#ifdef SUPPORT_MPU6050
 const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
-int16_t accelerometer_x, accelerometer_y, accelerometer_z; // variables for accelerometer raw data
+#endif
+#ifdef SUPPORT_MMA8451
+Adafruit_MMA8451 mma = Adafruit_MMA8451();
+#endif
+
+int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
@@ -103,11 +117,19 @@ void setup()
 {
   delay(1000);
   Serial.begin(9600);
-  Wire.begin();
-  Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
-  Wire.write(0x6B); // PWR_MGMT_1 register
-  Wire.write(0); // set to zero (wakes up the MPU-6050)
-  Wire.endTransmission(true);
+
+  #ifdef SUPPORT_MPU6050
+     Wire.begin();
+     Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
+     Wire.write(0x6B); // PWR_MGMT_1 register
+     Wire.write(0); // set to zero (wakes up the MPU-6050)
+     Wire.endTransmission(true);
+  #endif
+  #ifdef SUPPORT_MMA8451
+    mma.begin();
+    mma.setRange(MMA8451_RANGE_2_G);
+  #endif
+
   WiFi.begin(ssid, password);
 
   Serial.println();
@@ -135,32 +157,6 @@ void setup()
   Serial.println("HTTP Server gestartet");
 }
 
-
-/*
-void setup()
-{
-Serial.begin(115200);         // Serielle schnittstelle initialisieren
-Serial.println("");           // Lehere Zeile ausgeben
-Serial.println("Starte WLAN-Hotspot \"astral\"");
-WiFi.mode(WIFI_AP);           // access point modus
-WiFi.softAP("astral", "12345678");    // Name des Wi-Fi netzes
-delay(500);                   //Abwarten 0,5s
-Serial.print("IP Adresse ");  //Ausgabe aktueller IP des Servers
-Serial.println(WiFi.softAPIP());
-
-//  Bechandlung der Ereignissen anschlissen
-server.on("/", Ereignis_Index);
-server.on("/1.html", Ereignis_SchalteON);
-server.on("/0.html", Ereignis_SchalteOFF);
-
-server.begin();               // Starte den Server
-Serial.println("HTTP Server gestartet");
-}
-
-*/
-
-
-
 double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double aSmoothingFactor) {
   // IIR Low Pass Filter
   // y[i] := α * x[i] + (1-α) * y[i-1]
@@ -181,22 +177,30 @@ double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double a
 
 void readMotionSensor() {
 
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
-  Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
-  Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
+  #ifdef SUPPORT_MPU6050
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
 
-  // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
-  accelerometer_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x3B (ACCEL_XOUT_H) and 0x3C (ACCEL_XOUT_L)
-  accelerometer_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x3D (ACCEL_YOUT_H) and 0x3E (ACCEL_YOUT_L)
-  accelerometer_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x3F (ACCEL_ZOUT_H) and 0x40 (ACCEL_ZOUT_L)
-  temperature = Wire.read()<<8 | Wire.read(); // reading registers: 0x41 (TEMP_OUT_H) and 0x42 (TEMP_OUT_L)
-  gyro_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x43 (GYRO_XOUT_H) and 0x44 (GYRO_XOUT_L)
-  gyro_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x45 (GYRO_YOUT_H) and 0x46 (GYRO_YOUT_L)
-  gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
+    // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
+    ourAccelerometer_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x3B (ACCEL_XOUT_H) and 0x3C (ACCEL_XOUT_L)
+    ourAccelerometer_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x3D (ACCEL_YOUT_H) and 0x3E (ACCEL_YOUT_L)
+    ourAccelerometer_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x3F (ACCEL_ZOUT_H) and 0x40 (ACCEL_ZOUT_L)
+    temperature = Wire.read()<<8 | Wire.read(); // reading registers: 0x41 (TEMP_OUT_H) and 0x42 (TEMP_OUT_L)
+    gyro_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x43 (GYRO_XOUT_H) and 0x44 (GYRO_XOUT_L)
+    gyro_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x45 (GYRO_YOUT_H) and 0x46 (GYRO_YOUT_L)
+    gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
+  #endif
+  #ifdef SUPPORT_MMA8451
+    mma.read();
+    ourAccelerometer_x = mma.x;
+    ourAccelerometer_y = mma.y;
+    ourAccelerometer_z = mma.z;
+  #endif
 
   // print out data
-  double currentAngle =  atan2(accelerometer_x, accelerometer_z) * 180 / M_PI;
+  double currentAngle =  atan2(ourAccelerometer_x, ourAccelerometer_z) * 180 / M_PI;
   ourSmoothedAngle = irr_low_pass_filter(ourSmoothedAngle, currentAngle, 0.98d);
 }
 
@@ -208,16 +212,16 @@ void prepareMotionData() {
   float outAmplitude = round(smoothedAmplitude * 2)/2;
   Serial.print("Ruderweg = "); Serial.print(outAmplitude); Serial.println("mm");
 
+  Serial.print("aX = "); Serial.print(convert_int16_to_str(ourAccelerometer_x));
+  Serial.print(" | aY = "); Serial.print(convert_int16_to_str(ourAccelerometer_y));
+  Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(ourAccelerometer_z));
+  Serial.println();
   /*
-  Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
-  Serial.print(" | aY = "); Serial.print(convert_int16_to_str(accelerometer_y));
-  Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(accelerometer_z));
   // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
   Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
   Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
   Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
   Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
-  Serial.println();
   */
 }
 void loop()
