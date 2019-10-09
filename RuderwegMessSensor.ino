@@ -20,6 +20,7 @@
 // V0.10 : full functional initial version
 // V0.11 : use wifi data from private header file
 // V0.12 : support for MMA8451 added (no test HW available)
+// V0.13 : support for OLED
 
 /**
  * \file winkelmesser.ino
