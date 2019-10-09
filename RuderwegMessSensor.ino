@@ -42,6 +42,15 @@ const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to 
 Adafruit_MMA8451 mma = Adafruit_MMA8451();
 #endif
 
+//Jochen
+#define SUPPORT_OLED
+
+#ifdef SUPPORT_OLED
+#include <U8g2lib.h>         // OLED library  https://github.com/olikraus/u8g2
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D1, /* data=*/ D2); //OLED am Wemos D1 mini Pin 1 und 2
+#endif
+//Jochen
+
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
@@ -130,6 +139,12 @@ void setup()
     mma.begin();
     mma.setRange(MMA8451_RANGE_2_G);
   #endif
+  
+  //Jochen
+#ifdef SUPPORT_OLED
+u8g2.begin();
+#endif
+//Jochen
 
   WiFi.begin(ssid, password);
 
@@ -224,6 +239,33 @@ void prepareMotionData() {
   Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
   Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
   */
+  
+  //Jochen
+#ifdef SUPPORT_OLED
+u8g2.firstPage();                                                 // Display values
+  do {
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 15);
+    u8g2.print("Winkel:");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 15);
+    u8g2.print(outAngle);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 35);
+    u8g2.print("Rudertiefe");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 35);     
+    u8g2.print(ourRudderDepth);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 55);
+    u8g2.print("Ruderweg");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 55);     
+    u8g2.print(outAmplitude);
+     } while ( u8g2.nextPage() );
+#endif
+//Jochen  
 }
 void loop()
 {
