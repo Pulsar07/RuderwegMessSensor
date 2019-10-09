@@ -7,7 +7,7 @@
 //   #define MY_WIFI_SSID "<SSID>"
 //   #define MY_WIFI_PASSWORD "<CREDENTIALS>"
 #include "myWifiSettings.h"
-#define WM_VERSION "V0.12"
+#define WM_VERSION "V0.13"
 
 // #define SUPPORT_MMA8451
 #define SUPPORT_MPU6050
@@ -20,6 +20,7 @@
 // V0.10 : full functional initial version
 // V0.11 : use wifi data from private header file
 // V0.12 : support for MMA8451 added (no test HW available)
+// V0.13 : displayed angle with more precision
 
 /**
  * \file winkelmesser.ino
@@ -45,8 +46,18 @@ int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
-static double ourSmoothedAngle = 0;
-static double ourTaraAngle = 0;
+static double ourSmoothedAngle_x = 0;
+static double ourSmoothedAngle_y = 0;
+static double ourSmoothedAngle_z = 0;
+static double ourTaraAngle_x = 0;
+static double ourTaraAngle_y = 0;
+static double ourTaraAngle_z = 0;
+static double ourSmoothedGyro_x = 0;
+static double ourSmoothedGyro_y = 0;
+static double ourSmoothedGyro_z = 0;
+static double ourTaraGyro_x = 0;
+static double ourTaraGyro_y = 0;
+static double ourTaraGyro_z = 0;
 static double ourRudderDepth = 30;
 
 // WiFi network settings
@@ -58,11 +69,6 @@ ESP8266WebServer server(80);    // Server Port  hier einstellen
 void handleRoot() {
   String s = MAIN_page; //Read HTML contents
   server.send(200, "text/html", s); //Send web page
-}
-
-char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
-  sprintf(tmp_str, "%6d", i);
-  return tmp_str;
 }
 
 float roundToDot5(double aValue) {
@@ -77,16 +83,21 @@ void handleRudderDepthReq() {
 }
 
 void handleTaraAngleReq() {
-  ourTaraAngle = ourSmoothedAngle;
-  Serial.println("tara angle set to :" + String(ourTaraAngle));
+  ourTaraAngle_x = ourSmoothedAngle_x;
+  ourTaraAngle_y = ourSmoothedAngle_y;
+  ourTaraAngle_z = ourSmoothedAngle_z;
+  ourTaraGyro_x = ourSmoothedGyro_x;
+  ourTaraGyro_y = ourSmoothedGyro_y;
+  ourTaraGyro_z = ourSmoothedGyro_z;
+  Serial.println("tara angle set to :" + String(ourTaraAngle_z));
   server.send(200, "text/plane", ""); //Send web page
 }
 
 void handleDataReq() {
-  double resultingAngle = ourSmoothedAngle - ourTaraAngle;
+  double resultingAngle = ourSmoothedAngle_y - ourTaraAngle_y;
   double smoothedAmplitude = resultingAngle/360*M_PI * 2 * ourRudderDepth;
 
-  String angleString = String(roundToDot5(resultingAngle));
+  String angleString = String((float) resultingAngle);
   String amplitudeString = String(roundToDot5(smoothedAmplitude));
 
   server.send(200, "text/plane", angleString + ";" + amplitudeString); //Send the result value only to client ajax request
@@ -199,30 +210,33 @@ void readMotionSensor() {
     ourAccelerometer_z = mma.z;
   #endif
 
+  const static double smooth = 0.98d;
   // print out data
-  double currentAngle =  atan2(ourAccelerometer_x, ourAccelerometer_z) * 180 / M_PI;
-  ourSmoothedAngle = irr_low_pass_filter(ourSmoothedAngle, currentAngle, 0.98d);
+  ourSmoothedAngle_x = irr_low_pass_filter(ourSmoothedAngle_x,
+    atan2(ourAccelerometer_y, ourAccelerometer_z) * 180 / M_PI, smooth);
+  ourSmoothedAngle_y = irr_low_pass_filter(ourSmoothedAngle_y,
+    atan2(ourAccelerometer_x, ourAccelerometer_z) * 180 / M_PI, smooth);
+  ourSmoothedAngle_z = irr_low_pass_filter(ourSmoothedAngle_z,
+    atan2(ourAccelerometer_x, ourAccelerometer_y) * 180 / M_PI, smooth);
+  ourSmoothedGyro_x = irr_low_pass_filter(ourSmoothedGyro_x, gyro_x, smooth);
+  ourSmoothedGyro_y = irr_low_pass_filter(ourSmoothedGyro_y, gyro_y, smooth);
+  ourSmoothedGyro_z = irr_low_pass_filter(ourSmoothedGyro_z, gyro_z, smooth);
 }
 
 void prepareMotionData() {
-  float outAngle = round(ourSmoothedAngle * 2)/2;
-  Serial.print("Winkel = "); Serial.print(outAngle); Serial.println(" Grad");
-  int rudderdepth = 30;
-  double smoothedAmplitude = ourSmoothedAngle/360*M_PI * 2 * rudderdepth;
-  float outAmplitude = round(smoothedAmplitude * 2)/2;
-  Serial.print("Ruderweg = "); Serial.print(outAmplitude); Serial.println("mm");
-
-  Serial.print("aX = "); Serial.print(convert_int16_to_str(ourAccelerometer_x));
-  Serial.print(" | aY = "); Serial.print(convert_int16_to_str(ourAccelerometer_y));
-  Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(ourAccelerometer_z));
+  double effAngle_x = ourSmoothedAngle_x - ourTaraAngle_x;
+  double effAngle_y = ourSmoothedAngle_y - ourTaraAngle_y;
+  double effAngle_z = ourSmoothedAngle_z - ourTaraAngle_z;
+  double effGyro_x = ourSmoothedGyro_x - ourTaraGyro_x;
+  double effGyro_y = ourSmoothedGyro_y - ourTaraGyro_y;
+  double effGyro_z = ourSmoothedGyro_z - ourTaraGyro_z;
+  Serial.print(String("WX = ") + roundToDot5(effAngle_x));
+  Serial.print(String(" WY = ") + roundToDot5(effAngle_y));
+  Serial.print(String(" WZ = ") + roundToDot5(effAngle_z));
+  Serial.print(String(" GX = ") + roundToDot5(effGyro_x));
+  Serial.print(String(" GY = ") + roundToDot5(effGyro_y));
+  Serial.print(String(" GZ = ") + roundToDot5(effGyro_z));
   Serial.println();
-  /*
-  // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
-  Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
-  Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
-  Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
-  Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
-  */
 }
 void loop()
 {
