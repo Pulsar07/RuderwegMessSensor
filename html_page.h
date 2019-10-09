@@ -9,7 +9,6 @@ const char MAIN_page[] PROGMEM = R"=====(
   	<button type="button" onclick="setTaraAngle()">TARA</button> : Setzte Winkelmessung auf 0<br>
     <input type="number" onchange="setRudderDepth(this.value)" min="5" max="150" step="0.5" value="30"> : Setzte Ruder-Tiefe</input>
   </div>
-
   <div>
     <h2>Messung:</h2>
   	<h2>Winkel <tab id=t1>: <span id="angleValue">0</span>&deg;</h2>
