@@ -3,14 +3,21 @@
 #include <ESP8266WebServer.h>
 #include "Wire.h" // This library allows you to communicate with I2C devices.
 #include "html_page.h"
-// !! create a file "myWifiSettings" with the following content:
-//   #define MY_WIFI_SSID "<SSID>"
-//   #define MY_WIFI_PASSWORD "<CREDENTIALS>"
-#include "myWifiSettings.h"
-#define WM_VERSION "V0.15"
 
-// #define SUPPORT_MMA8451
-#define SUPPORT_MPU6050
+/*
+  !! create a file "myWifiSettings" with the following content:
+      #define MY_WIFI_SSID "<SSID>"
+      #define MY_WIFI_PASSWORD "<CREDENTIALS>"
+
+      // select on of these supported sensors connceted via I2C to D1 (SCL), D2 (SDA)
+      // #define SUPPORT_MMA8451
+      // #define SUPPORT_MPU6050
+
+      // a additional local connected for OLED display
+      // #define SUPPORT_OLED
+*/
+#include "mySettings.h"
+
 
 #ifdef SUPPORT_MMA8451
 #include <Adafruit_MMA8451.h>         // MMA8451 library
@@ -24,6 +31,9 @@
 // V0.14 : displayed angle with more precision
 // V0.15 : multi WiFi mode added, in addition to client mode
 //         the sensor now works as AP with
+// V0.16 : extract individual #define to mySettings.h
+//         and do some function sorting
+#define WM_VERSION "V0.16"
 
 /**
  * \file winkelmesser.ino
@@ -45,8 +55,6 @@ const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to 
 Adafruit_MMA8451 mma = Adafruit_MMA8451();
 #endif
 
-// for OLED display
-#define SUPPORT_OLED
 
 #ifdef SUPPORT_OLED
 #include <U8g2lib.h>         // OLED library  https://github.com/olikraus/u8g2
@@ -78,77 +86,6 @@ const char* ap_password = "12345678";
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
-void handleRoot() {
-  String s = MAIN_page; //Read HTML contents
-  server.send(200, "text/html", s); //Send web page
-}
-
-float roundToDot5(double aValue) {
-  return -round(aValue * 2)/2;
-}
-
-void handleRudderDepthReq() {
-  String depth = server.arg("value"); //Refer  xhttp.open("GET", "setRudderDepth?value="+aDepth", true);
-  ourRudderDepth = double(atoi(depth.c_str()))/10;
-  Serial.println("rudder depth is :" + String(ourRudderDepth));
-  server.send(200, "text/plane", ""); //Send web page
-}
-
-void handleTaraAngleReq() {
-  ourTaraAngle_x = ourSmoothedAngle_x;
-  ourTaraAngle_y = ourSmoothedAngle_y;
-  ourTaraAngle_z = ourSmoothedAngle_z;
-  ourTaraGyro_x = ourSmoothedGyro_x;
-  ourTaraGyro_y = ourSmoothedGyro_y;
-  ourTaraGyro_z = ourSmoothedGyro_z;
-  Serial.println("tara angle set to :" + String(ourTaraAngle_z));
-  server.send(200, "text/plane", ""); //Send web page
-}
-
-void handleDataReq() {
-  double resultingAngle = ourSmoothedAngle_y - ourTaraAngle_y;
-  double smoothedAmplitude = resultingAngle/360*M_PI * 2 * ourRudderDepth;
-
-  String angleString = String((float) resultingAngle);
-  String amplitudeString = String(roundToDot5(smoothedAmplitude));
-
-  server.send(200, "text/plane", angleString + ";" + amplitudeString); //Send the result value only to client ajax request
-}
-
-void handleVersionReq() {
-  server.send(200, "text/plane", WM_VERSION);
-}
-
-void handleWebRequests(){
-  // if(loadFromSpiffs(server.uri())) return;
-  String message = "File Not Detected\n\n";
-  message += "URI: ";
-  message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET)?"GET":"POST";
-  message += "\nArguments: ";
-  message += server.args();
-  message += "\n";
-  for (uint8_t i=0; i<server.args(); i++){
-    message += " NAME:"+server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
-  }
-  server.send(404, "text/plain", message);
-  Serial.println(message);
-}
-
-
-void setupWebServer() {
-  // react on these "pages"
-  server.on("/",handleRoot);
-  server.on("/readData",handleDataReq);
-  server.on("/readVersion",handleVersionReq);
-  server.on("/taraAngle",handleTaraAngleReq);
-  server.on("/setRudderDepth",handleRudderDepthReq);
-  server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
-  server.begin();               // Starte den Server
-  Serial.println("HTTP Server gestartet");
-}
-
 void setup()
 {
   delay(1000);
@@ -177,24 +114,25 @@ void setup()
   setupWebServer();
 }
 
-double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double aSmoothingFactor) {
-  // IIR Low Pass Filter
-  // y[i] := α * x[i] + (1-α) * y[i-1]
-  //      := α * x[i] + (1 * y[i-1]) - (α * y[i-1])
-  //      := α * x[i] +  y[i-1] - α * y[i-1]
-  //      := α * ( x[i] - y[i-1]) + y[i-1]
-  //      := y[i-1] + α * (x[i] - y[i-1])
-  // mit α = 1- β
-  //      := y[i-1] + (1-ß) * (x[i] - y[i-1])
-  //      := y[i-1] + 1 * (x[i] - y[i-1]) - ß * (x[i] - y[i-1])
-  //      := y[i-1] + x[i] - y[i-1] - ß * x[i] + ß * y[i-1]
-  //      := x[i] - ß * x[i] + ß * y[i-1]
-  //      := x[i] + ß * y[i-1] - ß * x[i]
-  //      := x[i] + ß * (y[i-1] - x[i])
-  // see: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter
-  return aCurrentValue + aSmoothingFactor * (aSmoothedValue - aCurrentValue);
+void loop()
+{
+  static unsigned long last = 0;
+  server.handleClient();
+
+  readMotionSensor();
+  if ( (millis() - last) > 1000) {
+    prepareMotionData();
+    #ifdef SUPPORT_OLED
+    setOLEDData();
+    #endif
+    last = millis();
+  }
 }
 
+
+// =================================
+// sensor data processing functions
+// =================================
 void readMotionSensor() {
 
   #ifdef SUPPORT_MPU6050
@@ -249,48 +187,107 @@ void prepareMotionData() {
 
 }
 
-  void setOLEDData() {
-  float outAngle = roundToDot5(ourSmoothedAngle_x);
-  double smoothedAmplitude = ourSmoothedAngle_x/360*M_PI * 2 * ourRudderDepth;
-  float outAmplitude = roundToDot5(smoothedAmplitude);
-  u8g2.firstPage();                                                 // Display values
-  do {
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_t0_14_tf);
-    u8g2.setCursor(1, 15);
-    u8g2.print("Winkel:");
-    u8g2.setFont(u8g2_font_crox4tb_tn);
-    u8g2.setCursor(78, 15);
-    u8g2.print(outAngle);
-    u8g2.setFont(u8g2_font_t0_14_tf);
-    u8g2.setCursor(1, 35);
-    u8g2.print("Rudertiefe");
-    u8g2.setFont(u8g2_font_crox4tb_tn);
-    u8g2.setCursor(78, 35);
-    u8g2.print(ourRudderDepth);
-    u8g2.setFont(u8g2_font_t0_14_tf);
-    u8g2.setCursor(1, 55);
-    u8g2.print("Ruderweg");
-    u8g2.setFont(u8g2_font_crox4tb_tn);
-    u8g2.setCursor(78, 55);
-    u8g2.print(outAmplitude);
-  } while (u8g2.nextPage() );
+// =================================
+// web server functions
+// =================================
+
+void setupWebServer() {
+  // react on these "pages"
+  server.on("/",handleRoot);
+  server.on("/readData",handleDataReq);
+  server.on("/readVersion",handleVersionReq);
+  server.on("/taraAngle",handleTaraAngleReq);
+  server.on("/setRudderDepth",handleRudderDepthReq);
+  server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
+  server.begin();               // Starte den Server
+  Serial.println("HTTP Server gestartet");
 }
 
-void loop()
-{
-  static unsigned long last = 0;
-  server.handleClient();
+void handleRoot() {
+  String s = MAIN_page; //Read HTML contents
+  server.send(200, "text/html", s); //Send web page
+}
 
-  readMotionSensor();
-  if ( (millis() - last) > 1000) {
-    prepareMotionData();
-    #ifdef SUPPORT_OLED
-    setOLEDData();
-    #endif
-    last = millis();
+void handleRudderDepthReq() {
+  String depth = server.arg("value"); //Refer  xhttp.open("GET", "setRudderDepth?value="+aDepth", true);
+  ourRudderDepth = double(atoi(depth.c_str()))/10;
+  Serial.println("rudder depth is :" + String(ourRudderDepth));
+  server.send(200, "text/plane", ""); //Send web page
+}
+
+void handleTaraAngleReq() {
+  ourTaraAngle_x = ourSmoothedAngle_x;
+  ourTaraAngle_y = ourSmoothedAngle_y;
+  ourTaraAngle_z = ourSmoothedAngle_z;
+  ourTaraGyro_x = ourSmoothedGyro_x;
+  ourTaraGyro_y = ourSmoothedGyro_y;
+  ourTaraGyro_z = ourSmoothedGyro_z;
+  Serial.println("tara angle set to :" + String(ourTaraAngle_z));
+  server.send(200, "text/plane", ""); //Send web page
+}
+
+void handleDataReq() {
+  double resultingAngle = ourSmoothedAngle_y - ourTaraAngle_y;
+  double smoothedAmplitude = resultingAngle/360*M_PI * 2 * ourRudderDepth;
+
+  String angleString = String((float) resultingAngle);
+  String amplitudeString = String(roundToDot5(smoothedAmplitude));
+
+  server.send(200, "text/plane", angleString + ";" + amplitudeString); //Send the result value only to client ajax request
+}
+
+void handleVersionReq() {
+  server.send(200, "text/plane", WM_VERSION);
+}
+
+void handleWebRequests(){
+  // if(loadFromSpiffs(server.uri())) return;
+  String message = "File Not Detected\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET)?"GET":"POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i=0; i<server.args(); i++){
+    message += " NAME:"+server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
   }
+  server.send(404, "text/plain", message);
+  Serial.println(message);
 }
+
+
+// =================================
+// helper function
+// =================================
+
+double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double aSmoothingFactor) {
+  // IIR Low Pass Filter
+  // y[i] := α * x[i] + (1-α) * y[i-1]
+  //      := α * x[i] + (1 * y[i-1]) - (α * y[i-1])
+  //      := α * x[i] +  y[i-1] - α * y[i-1]
+  //      := α * ( x[i] - y[i-1]) + y[i-1]
+  //      := y[i-1] + α * (x[i] - y[i-1])
+  // mit α = 1- β
+  //      := y[i-1] + (1-ß) * (x[i] - y[i-1])
+  //      := y[i-1] + 1 * (x[i] - y[i-1]) - ß * (x[i] - y[i-1])
+  //      := y[i-1] + x[i] - y[i-1] - ß * x[i] + ß * y[i-1]
+  //      := x[i] - ß * x[i] + ß * y[i-1]
+  //      := x[i] + ß * y[i-1] - ß * x[i]
+  //      := x[i] + ß * (y[i-1] - x[i])
+  // see: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter
+  return aCurrentValue + aSmoothingFactor * (aSmoothedValue - aCurrentValue);
+}
+
+float roundToDot5(double aValue) {
+  return -round(aValue * 2)/2;
+}
+
+
+// =================================
+// WiFi functions
+// =================================
 
 void setupWiFi() {
   // first try to connect to the stored WLAN, if this does not work try to
@@ -333,3 +330,38 @@ void setupWiFi() {
     Serial.println(", Adress: http://192.168.4.1");
   }
 }
+
+// =================================
+// OLED functions
+// =================================
+
+
+#ifdef SUPPORT_OLED
+void setOLEDData() {
+  float outAngle = roundToDot5(ourSmoothedAngle_x);
+  double smoothedAmplitude = ourSmoothedAngle_x/360*M_PI * 2 * ourRudderDepth;
+  float outAmplitude = roundToDot5(smoothedAmplitude);
+  u8g2.firstPage();                                                 // Display values
+  do {
+    u8g2.setFontDirection(0);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 15);
+    u8g2.print("Winkel:");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 15);
+    u8g2.print(outAngle);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 35);
+    u8g2.print("Rudertiefe");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 35);
+    u8g2.print(ourRudderDepth);
+    u8g2.setFont(u8g2_font_t0_14_tf);
+    u8g2.setCursor(1, 55);
+    u8g2.print("Ruderweg");
+    u8g2.setFont(u8g2_font_crox4tb_tn);
+    u8g2.setCursor(78, 55);
+    u8g2.print(outAmplitude);
+  } while (u8g2.nextPage() );
+}
+#endif
