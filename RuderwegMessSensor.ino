@@ -7,7 +7,7 @@
 //   #define MY_WIFI_SSID "<SSID>"
 //   #define MY_WIFI_PASSWORD "<CREDENTIALS>"
 #include "myWifiSettings.h"
-#define WM_VERSION "V0.14"
+#define WM_VERSION "V0.15"
 
 // #define SUPPORT_MMA8451
 #define SUPPORT_MPU6050
@@ -22,6 +22,8 @@
 // V0.12 : support for MMA8451 added (no test HW available)
 // V0.13 : support for OLED
 // V0.14 : displayed angle with more precision
+// V0.15 : multi WiFi mode added, in addition to client mode
+//         the sensor now works as AP with
 
 /**
  * \file winkelmesser.ino
@@ -54,7 +56,6 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* c
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
-char tmp_str[7]; // temporary variable used in convert function
 static double ourSmoothedAngle_x = 0;
 static double ourSmoothedAngle_y = 0;
 static double ourSmoothedAngle_z = 0;
@@ -72,6 +73,8 @@ static double ourRudderDepth = 30;
 // WiFi network settings
 const char* ssid = MY_WIFI_SSID;
 const char* password = MY_WIFI_PASSWORD;
+const char* ap_ssid = "UHU";
+const char* ap_password = "12345678";
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
@@ -133,10 +136,26 @@ void handleWebRequests(){
   Serial.println(message);
 }
 
+
+void setupWebServer() {
+  // react on these "pages"
+  server.on("/",handleRoot);
+  server.on("/readData",handleDataReq);
+  server.on("/readVersion",handleVersionReq);
+  server.on("/taraAngle",handleTaraAngleReq);
+  server.on("/setRudderDepth",handleRudderDepthReq);
+  server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
+  server.begin();               // Starte den Server
+  Serial.println("HTTP Server gestartet");
+}
+
 void setup()
 {
   delay(1000);
   Serial.begin(9600);
+  Serial.println();
+  Serial.print("Starting RuderwegMessSensor :");
+  Serial.println(WM_VERSION);
 
   #ifdef SUPPORT_MPU6050
      Wire.begin();
@@ -154,31 +173,8 @@ void setup()
     u8g2.begin();
   #endif
 
-  WiFi.begin(ssid, password);
-
-  Serial.println();
-  Serial.print("Connecting");
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("success!");
-  Serial.print("IP Address is: ");
-  Serial.println(WiFi.localIP());
-  //  Bechandlung der Ereignissen anschlissen
-
-
-  server.on("/",handleRoot);
-  server.on("/readData",handleDataReq);
-  server.on("/readVersion",handleVersionReq);
-  server.on("/taraAngle",handleTaraAngleReq);
-  server.on("/setRudderDepth",handleRudderDepthReq);
-  server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
-
-  server.begin();               // Starte den Server
-  Serial.println("HTTP Server gestartet");
+  setupWiFi();
+  setupWebServer();
 }
 
 double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double aSmoothingFactor) {
@@ -250,17 +246,10 @@ void prepareMotionData() {
   Serial.print(String(" GY = ") + roundToDot5(effGyro_y));
   Serial.print(String(" GZ = ") + roundToDot5(effGyro_z));
   Serial.println();
-  /*
-  // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
-  Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
-  Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
-  Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
-  Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
-  */
 
 }
 
-void setOLEDData() {
+  void setOLEDData() {
   float outAngle = roundToDot5(ourSmoothedAngle_x);
   double smoothedAmplitude = ourSmoothedAngle_x/360*M_PI * 2 * ourRudderDepth;
   float outAmplitude = roundToDot5(smoothedAmplitude);
@@ -300,5 +289,47 @@ void loop()
     setOLEDData();
     #endif
     last = millis();
+  }
+}
+
+void setupWiFi() {
+  // first try to connect to the stored WLAN, if this does not work try to
+  // start as Access Point
+  WiFi.mode(WIFI_AP_STA) ; // client mode only
+
+  WiFi.begin(ssid, password);
+
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.print(ssid);
+  int connectCnt = 0;
+  while (WiFi.status() != WL_CONNECTED && connectCnt++ < 20) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("success!");
+    Serial.print("IP Address is: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.print("cannot connect to SSID ");
+    Serial.println(ssid);
+  }
+  Serial.print("Starting WiFi Access Point with  SSID: ");
+  Serial.println(ap_ssid);
+  //ESP32 As access point IP: 192.168.4.1
+  // WiFi.mode(WIFI_AP) ; //Access Point mode
+  boolean res = WiFi.softAP(ap_ssid, ap_password);    //Password length minimum 8 char
+  if(res ==true) {
+    IPAddress myIP = WiFi.softAPIP();
+    Serial.println("AP setup done!");
+    Serial.print("Host IP Address: ");
+    Serial.println(myIP);
+    Serial.print("Please connect to SSID: ");
+    Serial.print(ap_password);
+    Serial.print(", PW: ");
+    Serial.print(ap_password);
+    Serial.println(", Adress: http://192.168.4.1");
   }
 }
