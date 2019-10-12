@@ -59,6 +59,8 @@ const char MAIN_page[] PROGMEM = R"=====(
   }
   getVersion();
   </script>
+  <a href="/adminPage" target="_parent"><button type="button">Einstellungen &auml;ndern</button></a>
+  <hr>
   <br><br><a href="https://so-fa.de/nh">www.so-fa.de/nh : Albatross, die Seite f&uuml;r Modellflug und Technik</a>
   </body>
   </html>

@@ -1,8 +1,10 @@
-
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include "Wire.h" // This library allows you to communicate with I2C devices.
-#include "html_page.h"
+#include "RuderwegMessSensorTypes.h"
+#include "htmlRootPage.h"
+#include "htmlAdminPage.h"
 
 /*
   !! create a file "myWifiSettings" with the following content:
@@ -33,7 +35,8 @@
 //         the sensor now works as AP with
 // V0.16 : extract individual #define to mySettings.h
 //         and do some function sorting
-#define WM_VERSION "V0.16"
+// V0.17 : admin page added, for individual settings support
+#define WM_VERSION "V0.17"
 
 /**
  * \file winkelmesser.ino
@@ -61,9 +64,12 @@ Adafruit_MMA8451 mma = Adafruit_MMA8451();
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ D1, /* data=*/ D2); //OLED am Wemos D1 mini Pin 1 und 2
 #endif
 
+static configData_t ourConfig;
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
+static double ourAngle = 0;
+static double ourTara = 0;
 static double ourSmoothedAngle_x = 0;
 static double ourSmoothedAngle_y = 0;
 static double ourSmoothedAngle_z = 0;
@@ -78,18 +84,22 @@ static double ourTaraGyro_y = 0;
 static double ourTaraGyro_z = 0;
 static double ourRudderDepth = 30;
 
+static referenceAxis_t ourReferenceAxis = xAxis;
+
 // WiFi network settings
 const char* ssid = MY_WIFI_SSID;
 const char* password = MY_WIFI_PASSWORD;
 const char* ap_ssid = "UHU";
 const char* ap_password = "12345678";
+String ourWifiSSID;
+String ourWifiPassword;
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
 void setup()
 {
   delay(1000);
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println();
   Serial.print("Starting RuderwegMessSensor :");
   Serial.println(WM_VERSION);
@@ -159,6 +169,7 @@ void readMotionSensor() {
 
   const static double smooth = 0.98d;
   // print out data
+  // Serial.println(ourAccelerometer_x);
   ourSmoothedAngle_x = irr_low_pass_filter(ourSmoothedAngle_x,
     atan2(ourAccelerometer_y, ourAccelerometer_z) * 180 / M_PI, smooth);
   ourSmoothedAngle_y = irr_low_pass_filter(ourSmoothedAngle_y,
@@ -168,6 +179,14 @@ void readMotionSensor() {
   ourSmoothedGyro_x = irr_low_pass_filter(ourSmoothedGyro_x, gyro_x, smooth);
   ourSmoothedGyro_y = irr_low_pass_filter(ourSmoothedGyro_y, gyro_y, smooth);
   ourSmoothedGyro_z = irr_low_pass_filter(ourSmoothedGyro_z, gyro_z, smooth);
+  switch (ourReferenceAxis) {
+    case xAxis:
+      ourAngle = ourSmoothedAngle_x;
+    break;
+    case yAxis:
+      ourAngle = ourSmoothedAngle_y;
+    break;
+  }
 }
 
 void prepareMotionData() {
@@ -184,8 +203,16 @@ void prepareMotionData() {
   Serial.print(String(" GY = ") + roundToDot5(effGyro_y));
   Serial.print(String(" GZ = ") + roundToDot5(effGyro_z));
   Serial.println();
-
 }
+
+double getAngle() {
+  return ourAngle - ourTara;
+}
+
+double getAmplitude(double aAngle) {
+  return aAngle/360*M_PI * 2 * ourRudderDepth;
+}
+
 
 // =================================
 // web server functions
@@ -193,26 +220,43 @@ void prepareMotionData() {
 
 void setupWebServer() {
   // react on these "pages"
-  server.on("/",handleRoot);
+  server.on("/",handleRootPage);
+  server.on("/adminPage",handleAdminPage);
   server.on("/readData",handleDataReq);
   server.on("/readVersion",handleVersionReq);
   server.on("/taraAngle",handleTaraAngleReq);
   server.on("/setRudderDepth",handleRudderDepthReq);
+  server.on("/pushSetting",handlePushSettingReq);
   server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
   server.begin();               // Starte den Server
   Serial.println("HTTP Server gestartet");
 }
 
-void handleRoot() {
-  String s = MAIN_page; //Read HTML contents
+void handleRootPage() {
+  Serial.println("handleRootPage()");
+  checkHTMLArguments();
+  String s = FPSTR(MAIN_page); //Read HTML contents
   server.send(200, "text/html", s); //Send web page
+}
+
+void handleAdminPage() {
+  Serial.println("handleAdmin()");
+  String s = FPSTR(ADMIN_page); //Read HTML contents
+  server.send(200, "text/html", s); //Send web page
+}
+
+
+void handlePushSettingReq() {
+  Serial.println("handlePushSettingReq()");
+  checkHTMLArguments();
+  server.send(200, "text/plane", ""); // send an valid answer
 }
 
 void handleRudderDepthReq() {
   String depth = server.arg("value"); //Refer  xhttp.open("GET", "setRudderDepth?value="+aDepth", true);
   ourRudderDepth = double(atoi(depth.c_str()))/10;
   Serial.println("rudder depth is :" + String(ourRudderDepth));
-  server.send(200, "text/plane", ""); //Send web page
+  server.send(200, "text/plane", ""); // send an valid answer
 }
 
 void handleTaraAngleReq() {
@@ -222,16 +266,23 @@ void handleTaraAngleReq() {
   ourTaraGyro_x = ourSmoothedGyro_x;
   ourTaraGyro_y = ourSmoothedGyro_y;
   ourTaraGyro_z = ourSmoothedGyro_z;
-  Serial.println("tara angle set to :" + String(ourTaraAngle_z));
-  server.send(200, "text/plane", ""); //Send web page
+  switch (ourReferenceAxis) {
+    case xAxis:
+      ourTara = ourSmoothedAngle_x;
+    break;
+    case yAxis:
+      ourTara = ourSmoothedAngle_y;
+    break;
+  }
+  Serial.println("tara angle set to :" + String(ourTara));
+  server.send(200, "text/plane", ""); // send an valid answer
 }
 
-void handleDataReq() {
-  double resultingAngle = ourSmoothedAngle_y - ourTaraAngle_y;
-  double smoothedAmplitude = resultingAngle/360*M_PI * 2 * ourRudderDepth;
 
-  String angleString = String((float) resultingAngle);
-  String amplitudeString = String(roundToDot5(smoothedAmplitude));
+void handleDataReq() {
+  double angle = getAngle();
+  String angleString = String((float) angle);
+  String amplitudeString = String(roundToDot5(getAmplitude(angle)));
 
   server.send(200, "text/plane", angleString + ";" + amplitudeString); //Send the result value only to client ajax request
 }
@@ -257,6 +308,34 @@ void handleWebRequests(){
   Serial.println(message);
 }
 
+void checkHTMLArguments() {
+  Serial.print("checkHTMLArguments(");
+  String name = server.arg("name");
+  String value = server.arg("value");
+  Serial.print(name);
+  Serial.print("=");
+  Serial.print(value);
+  Serial.println(")");
+
+  if (name == "referenceAxis") {
+    if (value == "xAxis") {
+      ourReferenceAxis = xAxis;
+    } else {
+      ourReferenceAxis = yAxis;
+    }
+  } else if ( name == "wifissid") {
+    ourWifiSSID = value;
+  } else if ( name == "wifipassword") {
+    ourWifiPassword = value;
+  } else if ( name == "settings") {
+    if (value == "save") {
+      // save the settings to EEPROM
+    } else {
+      // do nothing
+    }
+  } else if ( name == "resetConfig") {
+  }
+}
 
 // =================================
 // helper function
@@ -335,12 +414,11 @@ void setupWiFi() {
 // OLED functions
 // =================================
 
-
 #ifdef SUPPORT_OLED
 void setOLEDData() {
-  float outAngle = roundToDot5(ourSmoothedAngle_x);
-  double smoothedAmplitude = ourSmoothedAngle_x/360*M_PI * 2 * ourRudderDepth;
-  float outAmplitude = roundToDot5(smoothedAmplitude);
+  double angle = getAngle();
+  float outAngle = roundToDot5(angle);
+  float outAmplitude = roundToDot5(getAmplitude(angle)));
   u8g2.firstPage();                                                 // Display values
   do {
     u8g2.setFontDirection(0);
@@ -365,3 +443,35 @@ void setOLEDData() {
   } while (u8g2.nextPage() );
 }
 #endif
+
+// =================================
+// EEPROM functions
+// =================================
+
+void eraseConfig() {
+  // Reset EEPROM bytes to '0' for the length of the data structure
+  EEPROM.begin(512);
+  for (int i = 0 ; i < sizeof(ourConfig) ; i++) {
+    EEPROM.write(i, 0);
+  }
+  delay(200);
+  EEPROM.commit();
+  EEPROM.end();
+}
+
+
+void saveConfig() {
+  // Save configuration from RAM into EEPROM
+  EEPROM.begin(512);
+  EEPROM.put(0, ourConfig );
+  delay(200);
+  EEPROM.commit();                      // Only needed for ESP8266 to get data written
+  EEPROM.end();                         // Free RAM copy of structure
+}
+
+void loadConfig() {
+  // Loads configuration from EEPROM into RAM
+  EEPROM.begin(512);
+  EEPROM.get(0, ourConfig );
+  EEPROM.end();
+}
