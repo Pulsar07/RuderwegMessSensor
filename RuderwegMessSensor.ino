@@ -5,12 +5,10 @@
 #include "RuderwegMessSensorTypes.h"
 #include "htmlRootPage.h"
 #include "htmlAdminPage.h"
+#include "htmlScript.h"
 
 /*
   !! create a file "myWifiSettings" with the following content:
-      #define MY_WIFI_SSID "<SSID>"
-      #define MY_WIFI_PASSWORD "<CREDENTIALS>"
-
       // select on of these supported sensors connceted via I2C to D1 (SCL), D2 (SDA)
       // #define SUPPORT_MMA8451
       // #define SUPPORT_MPU6050
@@ -19,7 +17,6 @@
       // #define SUPPORT_OLED
 */
 #include "mySettings.h"
-
 
 #ifdef SUPPORT_MMA8451
 #include <Adafruit_MMA8451.h>         // MMA8451 library
@@ -35,8 +32,12 @@
 //         the sensor now works as AP with
 // V0.16 : extract individual #define to mySettings.h
 //         and do some function sorting
-// V0.17 : admin page added, for individual settings support
-#define WM_VERSION "V0.17"
+// V0.17 : admin page added, for individual settings support,
+//         added support for precision and inverted values,
+//         including persistent config support (EEPROM),
+//         refactoring of AJAX procedures
+// V0.18 : bugfix : wrong calculation of rudderdepth from web GUI
+#define WM_VERSION "V0.18"
 
 /**
  * \file winkelmesser.ino
@@ -68,7 +69,6 @@ static configData_t ourConfig;
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
-static double ourAngle = 0;
 static double ourTara = 0;
 static double ourSmoothedAngle_x = 0;
 static double ourSmoothedAngle_y = 0;
@@ -84,15 +84,8 @@ static double ourTaraGyro_y = 0;
 static double ourTaraGyro_z = 0;
 static double ourRudderDepth = 30;
 
-static referenceAxis_t ourReferenceAxis = xAxis;
 
-// WiFi network settings
-const char* ssid = MY_WIFI_SSID;
-const char* password = MY_WIFI_PASSWORD;
 const char* ap_ssid = "UHU";
-const char* ap_password = "12345678";
-String ourWifiSSID;
-String ourWifiPassword;
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
@@ -100,9 +93,13 @@ void setup()
 {
   delay(1000);
   Serial.begin(115200);
+  delay(1000);
   Serial.println();
   Serial.print("Starting RuderwegMessSensor :");
   Serial.println(WM_VERSION);
+
+  loadConfig();
+  showConfig("stored configuration:");
 
   #ifdef SUPPORT_MPU6050
      Wire.begin();
@@ -173,20 +170,12 @@ void readMotionSensor() {
   ourSmoothedAngle_x = irr_low_pass_filter(ourSmoothedAngle_x,
     atan2(ourAccelerometer_y, ourAccelerometer_z) * 180 / M_PI, smooth);
   ourSmoothedAngle_y = irr_low_pass_filter(ourSmoothedAngle_y,
-    atan2(ourAccelerometer_x, ourAccelerometer_z) * 180 / M_PI, smooth);
+    atan2(ourAccelerometer_z, ourAccelerometer_x) * 180 / M_PI, smooth);
   ourSmoothedAngle_z = irr_low_pass_filter(ourSmoothedAngle_z,
     atan2(ourAccelerometer_x, ourAccelerometer_y) * 180 / M_PI, smooth);
   ourSmoothedGyro_x = irr_low_pass_filter(ourSmoothedGyro_x, gyro_x, smooth);
   ourSmoothedGyro_y = irr_low_pass_filter(ourSmoothedGyro_y, gyro_y, smooth);
   ourSmoothedGyro_z = irr_low_pass_filter(ourSmoothedGyro_z, gyro_z, smooth);
-  switch (ourReferenceAxis) {
-    case xAxis:
-      ourAngle = ourSmoothedAngle_x;
-    break;
-    case yAxis:
-      ourAngle = ourSmoothedAngle_y;
-    break;
-  }
 }
 
 void prepareMotionData() {
@@ -196,23 +185,79 @@ void prepareMotionData() {
   double effGyro_x = ourSmoothedGyro_x - ourTaraGyro_x;
   double effGyro_y = ourSmoothedGyro_y - ourTaraGyro_y;
   double effGyro_z = ourSmoothedGyro_z - ourTaraGyro_z;
-  Serial.print(String("WX = ") + roundToDot5(effAngle_x));
-  Serial.print(String(" WY = ") + roundToDot5(effAngle_y));
-  Serial.print(String(" WZ = ") + roundToDot5(effAngle_z));
-  Serial.print(String(" GX = ") + roundToDot5(effGyro_x));
-  Serial.print(String(" GY = ") + roundToDot5(effGyro_y));
-  Serial.print(String(" GZ = ") + roundToDot5(effGyro_z));
-  Serial.println();
+  // Serial.print(String("WX = ") + roundToDot5(effAngle_x));
+  // Serial.print(String(" WY = ") + roundToDot5(effAngle_y));
+  // Serial.print(String(" WZ = ") + roundToDot5(effAngle_z));
+  // Serial.print(String(" GX = ") + roundToDot5(effGyro_x));
+  // Serial.print(String(" GY = ") + roundToDot5(effGyro_y));
+  // Serial.print(String(" GZ = ") + roundToDot5(effGyro_z));
+  // Serial.println();
 }
 
 double getAngle() {
-  return ourAngle - ourTara;
+  static double ourAngle = 0;
+  switch (ourConfig.axis) {
+    case xAxis:
+      ourAngle = ourSmoothedAngle_x;
+    break;
+    case yAxis:
+      ourAngle = ourSmoothedAngle_y;
+    break;
+    case zAxis:
+      ourAngle = ourSmoothedAngle_z;
+    break;
+  }
+  return (ourAngle - ourTara) * ourConfig.angleInversion;
 }
 
 double getAmplitude(double aAngle) {
-  return aAngle/360*M_PI * 2 * ourRudderDepth;
+  return (aAngle/360*M_PI * 2 * ourRudderDepth) * ourConfig.amplitudeInversion;
 }
 
+
+float getRoundedAngle() {
+  return roundPrecision(getAngle(), ourConfig.anglePrecision);
+}
+
+float getRoundedAmplitude() {
+  return roundPrecision(getAmplitude(getAngle()), ourConfig.amplitudePrecision);
+}
+
+float roundPrecision(double aVal, precision_t aPrecision) {
+  float res = aVal;
+  switch(aPrecision) {
+    case P001:
+      break;
+    case P010:
+      res = round(res * 10)/10;
+      break;
+    case P050:
+      res = round(res * 2)/2;
+      break;
+    case P100:
+      res = round(res);
+      break;
+    }
+  return res;
+}
+
+void taraAngle() {
+  ourTaraAngle_x = ourSmoothedAngle_x;
+  ourTaraAngle_y = ourSmoothedAngle_y;
+  ourTaraAngle_z = ourSmoothedAngle_z;
+  switch (ourConfig.axis) {
+    case xAxis:
+      ourTara = ourSmoothedAngle_x;
+    break;
+    case yAxis:
+      ourTara = ourSmoothedAngle_y;
+    break;
+    case zAxis:
+      ourTara = ourSmoothedAngle_z;
+    break;
+  }
+  Serial.println("tara angle set to :" + String(ourTara));
+}
 
 // =================================
 // web server functions
@@ -220,75 +265,226 @@ double getAmplitude(double aAngle) {
 
 void setupWebServer() {
   // react on these "pages"
-  server.on("/",handleRootPage);
-  server.on("/adminPage",handleAdminPage);
-  server.on("/readData",handleDataReq);
-  server.on("/readVersion",handleVersionReq);
-  server.on("/taraAngle",handleTaraAngleReq);
-  server.on("/setRudderDepth",handleRudderDepthReq);
-  server.on("/pushSetting",handlePushSettingReq);
+  server.on("/",HTMLrootPage);
+  server.on("/adminPage",HTMLadminPage);
+  server.on("/getDataReq",getDataReq);
+  server.on("/setDataReq",setDataReq);
   server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
   server.begin();               // Starte den Server
   Serial.println("HTTP Server gestartet");
 }
 
-void handleRootPage() {
-  Serial.println("handleRootPage()");
+void HTMLrootPage() {
+  Serial.println("HTMLrootPage()");
   checkHTMLArguments();
   String s = FPSTR(MAIN_page); //Read HTML contents
+  s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
   server.send(200, "text/html", s); //Send web page
 }
 
-void handleAdminPage() {
-  Serial.println("handleAdmin()");
+void HTMLadminPage() {
+  Serial.println("HTMLadminPage()");
   String s = FPSTR(ADMIN_page); //Read HTML contents
+  s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
   server.send(200, "text/html", s); //Send web page
 }
 
 
-void handlePushSettingReq() {
-  Serial.println("handlePushSettingReq()");
-  checkHTMLArguments();
-  server.send(200, "text/plane", ""); // send an valid answer
-}
+void setDataReq() {
+  Serial.println("setDataReq()");
+  String name = server.arg("name");
+  String value = server.arg("value");
+  Serial.print("  "); Serial.print(name); Serial.print("="); Serial.println(value);
+  boolean sendResponse = true;
 
-void handleRudderDepthReq() {
-  String depth = server.arg("value"); //Refer  xhttp.open("GET", "setRudderDepth?value="+aDepth", true);
-  ourRudderDepth = double(atoi(depth.c_str()))/10;
-  Serial.println("rudder depth is :" + String(ourRudderDepth));
-  server.send(200, "text/plane", ""); // send an valid answer
-}
-
-void handleTaraAngleReq() {
-  ourTaraAngle_x = ourSmoothedAngle_x;
-  ourTaraAngle_y = ourSmoothedAngle_y;
-  ourTaraAngle_z = ourSmoothedAngle_z;
-  ourTaraGyro_x = ourSmoothedGyro_x;
-  ourTaraGyro_y = ourSmoothedGyro_y;
-  ourTaraGyro_z = ourSmoothedGyro_z;
-  switch (ourReferenceAxis) {
-    case xAxis:
-      ourTara = ourSmoothedAngle_x;
-    break;
-    case yAxis:
-      ourTara = ourSmoothedAngle_y;
-    break;
+  String retVal = "";
+  if ( name == "cmd_taraAngle") {
+    taraAngle();
+  } else
+  if ( name == "id_rudderDepth") {
+    ourRudderDepth = double(atoi(value.c_str()))/10;
+    Serial.println("setting rudderdepth: " + String(ourRudderDepth));
+  } else
+  if ( name == "id_invertAngle") {
+    if (value == "true") {
+      ourConfig.angleInversion = -1;
+    } else {
+      ourConfig.angleInversion = -1;
+    }
+    Serial.println("setting angle factor: " + String(ourConfig.angleInversion));
+  } else
+  if ( name == "id_invertAmplitude") {
+    if (value == "true") {
+      ourConfig.amplitudeInversion = -1;
+    } else {
+      ourConfig.amplitudeInversion = 1;
+    }
+    Serial.println("setting amplitude factor: " + String(ourConfig.amplitudeInversion));
+  } else
+  if ( name == "id_apActive") {
+    if (value == "true") {
+      ourConfig.apIsActive = true;
+    } else {
+      ourConfig.apIsActive = false;
+    }
+    Serial.println("setting AP active : " + String(ourConfig.apIsActive));
+  } else
+  if ( name == "nm_referenceAxis") {
+    if (value == "xAxis") {
+      ourConfig.axis = xAxis;
+    } else if (value == "yAxis") {
+      ourConfig.axis = yAxis;
+    } else if (value == "zAxis") {
+      ourConfig.axis = zAxis;
+    }
+    Serial.println("setting angle reference axis: " + String(ourConfig.axis));
+  } else
+  if ( name == "nm_anglePrecision") {
+    if (value == "P010") {
+      ourConfig.anglePrecision = P010;
+    } else if (value == "P001") {
+      ourConfig.anglePrecision = P001;
+    }
+    Serial.println("setting angle precision: " + String(ourConfig.anglePrecision));
+  } else
+  if ( name == "nm_precisionAmplitude") {
+    if (value == "P010") {
+      ourConfig.amplitudePrecision = P010;
+    } else if (value == "P050") {
+      ourConfig.amplitudePrecision = P050;
+    } else if (value == "P100") {
+      ourConfig.amplitudePrecision = P100;
+    }
+    Serial.println("setting amplitude precision: " + String(ourConfig.amplitudePrecision));
+  } else
+  if ( name == "id_wlanSsid") {
+    strncpy(ourConfig.wlanSsid, value.c_str(), CONFIG_SSID_L);
+    Serial.println("setting wlan ssid : " + String(ourConfig.wlanSsid));
+  } else
+  if ( name == "id_wlanPasswd") {
+    strncpy(ourConfig.wlanPasswd, value.c_str(), CONFIG_PASSW_L);
+    Serial.println("setting wlan password : " + String(ourConfig.wlanPasswd));
+  } else
+  if ( name == "id_apPasswd") {
+    if (String(value).length() >= 8) {
+      strncpy(ourConfig.apPasswd, value.c_str(), CONFIG_PASSW_L);
+      Serial.println("setting AP password : " + String(ourConfig.apPasswd));
+    } else {
+      Serial.println("not setting AP password, too short : " + String(ourConfig.apPasswd));
+    }
+  } else
+  if (name == "cmd_saveConfig") {
+     showConfig("==== before");
+     saveConfig();
+     showConfig("==== after");
+     sendResponse = false;
+  } else
+  if (name == "cmd_resetConfig") {
+     Serial.println("before reset");
+     setDefautConfig();
+     showConfig("==== after");
   }
-  Serial.println("tara angle set to :" + String(ourTara));
-  server.send(200, "text/plane", ""); // send an valid answer
+
+  if (sendResponse) {
+    Serial.println("send response to server");
+    server.send(200, "text/plane", retVal); // send an valid answer
+  }
 }
 
 
-void handleDataReq() {
-  double angle = getAngle();
-  String angleString = String((float) angle);
-  String amplitudeString = String(roundToDot5(getAmplitude(angle)));
+void getDataReq() {
+  // element ids:
+  //   angleValue
+  //   amplitudeValue
+  //   rudderDepth , input type text
 
-  server.send(200, "text/plane", angleString + ";" + amplitudeString); //Send the result value only to client ajax request
-}
+  Serial.print("getDataReq() :");
+  String result;
+  for (uint8_t i=0; i<server.args(); i++){
+    // message += " NAME:"+server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
+    String argName = server.argName(i);
 
-void handleVersionReq() {
-  server.send(200, "text/plane", WM_VERSION);
+    Serial.print(argName); Serial.print(",");
+    if (argName.equals("id_angleValue")) {
+      result += argName + "=" + String(getRoundedAngle()) + ";";
+    } else
+    if (argName.equals("id_amplitudeValue")) {
+      result += argName + "=" + String(getRoundedAmplitude()) + ";";
+    } else
+    if (argName.equals("id_rudderDepth")) {
+      result += argName + "=" + ourRudderDepth + ";";
+    } else
+    if (argName.equals("id_version")) {
+      result += argName + "=" + WM_VERSION + ";";
+    } else
+    if (argName.equals("id_wlanSsid")) {
+      if (String(ourConfig.wlanSsid).length() != 0) {
+        result += argName + "=" + ourConfig.wlanSsid + ";";
+      }
+    } else
+    if (argName.equals("id_wlanPasswd")) {
+      if (String(ourConfig.wlanPasswd).length() != 0) {
+        result += argName + "=" + "************;";
+      }
+    } else
+    if (argName.equals("id_apPasswd")) {
+      if (String(ourConfig.apPasswd).length() != 0) {
+        result += argName + "=" + "************;";
+      }
+    } else
+    if (argName.equals("id_invertAngle")) {
+      if (ourConfig.angleInversion == -1) {
+        result += argName + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("id_invertAmplitude")) {
+      if (ourConfig.amplitudeInversion == -1) {
+        result += argName + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("nm_referenceAxis")) {
+      switch (ourConfig.axis) {
+         case xAxis:
+           result += String("id_xAxis") + "=" + "checked;";
+           break;
+         case yAxis:
+           result += String("id_yAxis") + "=" + "checked;";
+           break;
+         case zAxis:
+           result += String("id_zAxis") + "=" + "checked;";
+           break;
+      }
+    } else
+    if (argName.equals("nm_anglePrecision")) {
+      if (ourConfig.anglePrecision == P010) {
+        result += String("id_anglePrec_P010") + "=" + "checked;";
+      } else {
+        result += String("id_anglePrec_P001") + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("nm_precisionAmplitude")) {
+      if (ourConfig.amplitudePrecision == P010) {
+        result += String("id_amplPrec_P010") + "=" + "checked;";
+      } else if (ourConfig.amplitudePrecision == P050) {
+        result += String("id_amplPrec_P050") + "=" + "checked;";
+      } else {
+        result += String("id_amplPrec_P100") + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("id_apActive")) {
+      if (ourConfig.apIsActive == true) {
+        result += argName + "=" + "checked;";
+      }
+    }
+  }
+  Serial.println();
+  // strip last semicolon
+  result.remove(result.length()-1);
+  // result += String(";rudderDepth=") + ourRudderDepth;
+
+  Serial.print("result:");
+  Serial.println(result);
+  server.send(200, "text/plane", result.c_str()); //Send the result value only to client ajax request
 }
 
 void handleWebRequests(){
@@ -309,31 +505,10 @@ void handleWebRequests(){
 }
 
 void checkHTMLArguments() {
-  Serial.print("checkHTMLArguments(");
+  Serial.println("checkHTMLArguments()");
   String name = server.arg("name");
-  String value = server.arg("value");
-  Serial.print(name);
-  Serial.print("=");
-  Serial.print(value);
-  Serial.println(")");
-
-  if (name == "referenceAxis") {
-    if (value == "xAxis") {
-      ourReferenceAxis = xAxis;
-    } else {
-      ourReferenceAxis = yAxis;
-    }
-  } else if ( name == "wifissid") {
-    ourWifiSSID = value;
-  } else if ( name == "wifipassword") {
-    ourWifiPassword = value;
-  } else if ( name == "settings") {
-    if (value == "save") {
-      // save the settings to EEPROM
-    } else {
-      // do nothing
-    }
-  } else if ( name == "resetConfig") {
+  if (name.length() != 0) {
+    setDataReq();
   }
 }
 
@@ -360,7 +535,7 @@ double irr_low_pass_filter(double aSmoothedValue, double aCurrentValue, double a
 }
 
 float roundToDot5(double aValue) {
-  return -round(aValue * 2)/2;
+  return round(aValue * 2)/2;
 }
 
 
@@ -373,15 +548,17 @@ void setupWiFi() {
   // start as Access Point
   WiFi.mode(WIFI_AP_STA) ; // client mode only
 
-  WiFi.begin(ssid, password);
+  if (String(ourConfig.wlanSsid).length() != 0 ) {
+    WiFi.begin(ourConfig.wlanSsid, ourConfig.wlanPasswd);
 
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
-  int connectCnt = 0;
-  while (WiFi.status() != WL_CONNECTED && connectCnt++ < 20) {
-    delay(500);
-    Serial.print(".");
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.print(ourConfig.wlanSsid);
+    int connectCnt = 0;
+    while (WiFi.status() != WL_CONNECTED && connectCnt++ < 20) {
+      delay(500);
+      Serial.print(".");
+    }
   }
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -390,23 +567,25 @@ void setupWiFi() {
     Serial.println(WiFi.localIP());
   } else {
     Serial.print("cannot connect to SSID ");
-    Serial.println(ssid);
+    Serial.println(ourConfig.wlanSsid);
   }
-  Serial.print("Starting WiFi Access Point with  SSID: ");
-  Serial.println(ap_ssid);
-  //ESP32 As access point IP: 192.168.4.1
-  // WiFi.mode(WIFI_AP) ; //Access Point mode
-  boolean res = WiFi.softAP(ap_ssid, ap_password);    //Password length minimum 8 char
-  if(res ==true) {
-    IPAddress myIP = WiFi.softAPIP();
-    Serial.println("AP setup done!");
-    Serial.print("Host IP Address: ");
-    Serial.println(myIP);
-    Serial.print("Please connect to SSID: ");
-    Serial.print(ap_password);
-    Serial.print(", PW: ");
-    Serial.print(ap_password);
-    Serial.println(", Adress: http://192.168.4.1");
+  if (ourConfig.apIsActive) {
+    Serial.print("Starting WiFi Access Point with  SSID: ");
+    Serial.println(ap_ssid);
+    //ESP32 As access point IP: 192.168.4.1
+    // WiFi.mode(WIFI_AP) ; //Access Point mode
+    boolean res = WiFi.softAP(ap_ssid, ourConfig.apPasswd);    //Password length minimum 8 char
+    if(res ==true) {
+      IPAddress myIP = WiFi.softAPIP();
+      Serial.println("AP setup done!");
+      Serial.print("Host IP Address: ");
+      Serial.println(myIP);
+      Serial.print("Please connect to SSID: ");
+      Serial.print(ap_ssid);
+      Serial.print(", PW: ");
+      Serial.print(ourConfig.apPasswd);
+      Serial.println(", Address: http://192.168.4.1");
+    }
   }
 }
 
@@ -448,19 +627,40 @@ void setOLEDData() {
 // EEPROM functions
 // =================================
 
-void eraseConfig() {
+void showConfig(char* aContext) {
+  Serial.println(aContext);
+  Serial.print("cfg version         = "); Serial.println(ourConfig.version);
+  Serial.print("axis                = "); Serial.println(ourConfig.axis);
+  Serial.print("amplitudePrecision  = "); Serial.println(ourConfig.amplitudePrecision);
+  Serial.print("anglePrecision      = "); Serial.println(ourConfig.anglePrecision);
+  Serial.print("apIsActive          = "); Serial.println(ourConfig.apIsActive);
+  Serial.print("angleInversion      = "); Serial.println(ourConfig.angleInversion);
+  Serial.print("amplitudeInversion  = "); Serial.println(ourConfig.amplitudeInversion);
+  Serial.print("wlanSsid            = "); Serial.println(ourConfig.wlanSsid);
+  Serial.print("wlanPasswd          = "); Serial.println(ourConfig.wlanPasswd);
+  Serial.print("apPasswd            = "); Serial.println(ourConfig.apPasswd);
+}
+
+void setDefautConfig() {
+  Serial.println("setDefaultConfig()");
   // Reset EEPROM bytes to '0' for the length of the data structure
-  EEPROM.begin(512);
-  for (int i = 0 ; i < sizeof(ourConfig) ; i++) {
-    EEPROM.write(i, 0);
-  }
-  delay(200);
-  EEPROM.commit();
-  EEPROM.end();
+  ourConfig.axis = xAxis;
+  strncpy(ourConfig.version , CONFIG_VERSION, CONFIG_VERSION_L);
+  ourConfig.axis = xAxis;
+  ourConfig.amplitudeInversion = 1;
+  ourConfig.angleInversion = 1;
+  ourConfig.apIsActive=true;
+  ourConfig.anglePrecision = P010;
+  ourConfig.amplitudePrecision = P050;
+  strncpy(ourConfig.wlanSsid , "", CONFIG_SSID_L);
+  strncpy(ourConfig.wlanPasswd, "", CONFIG_PASSW_L);
+  strncpy(ourConfig.apPasswd, "12345678", CONFIG_PASSW_L);
+  saveConfig();
 }
 
 
 void saveConfig() {
+  Serial.println("saveConfig()");
   // Save configuration from RAM into EEPROM
   EEPROM.begin(512);
   EEPROM.put(0, ourConfig );
@@ -470,8 +670,13 @@ void saveConfig() {
 }
 
 void loadConfig() {
+  Serial.println("loadConfig()");
   // Loads configuration from EEPROM into RAM
   EEPROM.begin(512);
   EEPROM.get(0, ourConfig );
   EEPROM.end();
+  // config was never written to EEPROM, so set the default config data and save it to EEPROM
+  if ( String(CONFIG_VERSION) != ourConfig.version ) {
+    setDefautConfig();
+  }
 }
