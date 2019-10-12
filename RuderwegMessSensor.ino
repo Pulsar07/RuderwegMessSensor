@@ -37,7 +37,8 @@
 //         including persistent config support (EEPROM),
 //         refactoring of AJAX procedures
 // V0.18 : bugfix : wrong calculation of rudderdepth from web GUI
-#define WM_VERSION "V0.18"
+// V0.19 : more bugfix : wifi, config page, new amplitude prec 0.01mm
+#define WM_VERSION "V0.19"
 
 /**
  * \file winkelmesser.ino
@@ -348,7 +349,9 @@ void setDataReq() {
     Serial.println("setting angle precision: " + String(ourConfig.anglePrecision));
   } else
   if ( name == "nm_precisionAmplitude") {
-    if (value == "P010") {
+    if (value == "P001") {
+      ourConfig.amplitudePrecision = P001;
+    } else if (value == "P010") {
       ourConfig.amplitudePrecision = P010;
     } else if (value == "P050") {
       ourConfig.amplitudePrecision = P050;
@@ -546,9 +549,9 @@ float roundToDot5(double aValue) {
 void setupWiFi() {
   // first try to connect to the stored WLAN, if this does not work try to
   // start as Access Point
-  WiFi.mode(WIFI_AP_STA) ; // client mode only
 
   if (String(ourConfig.wlanSsid).length() != 0 ) {
+    WiFi.mode(WIFI_STA) ; // client mode only
     WiFi.begin(ourConfig.wlanSsid, ourConfig.wlanPasswd);
 
     Serial.println();
@@ -568,6 +571,7 @@ void setupWiFi() {
   } else {
     Serial.print("cannot connect to SSID ");
     Serial.println(ourConfig.wlanSsid);
+    WiFi.mode(WIFI_AP) ; // client mode only
   }
   if (ourConfig.apIsActive) {
     Serial.print("Starting WiFi Access Point with  SSID: ");

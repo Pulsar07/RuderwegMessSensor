@@ -45,6 +45,10 @@ const char ADMIN_page[] PROGMEM = R"=====(
     onchange="sendNameValue(this.id, this.checked)">
   <label for="id_invertAmplitude"> : Invertiere die Weganzeige (+/-)</label>
   <br>
+  <input type="radio" id="id_amplPrec_P001" name="nm_precisionAmplitude" value="P001"
+    onchange="sendNameValue(this.name, this.value)" >
+  <label for="id_amplPrec_P001"> : 0.01 mm-Anzeige-Genauigkeit</label>
+  <br>
   <input type="radio" id="id_amplPrec_P010" name="nm_precisionAmplitude" value="P010"
     onchange="sendNameValue(this.name, this.value)" >
   <label for="id_amplPrec_P010"> : 0.1 mm-Anzeige-Genauigkeit</label>
@@ -69,7 +73,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <label for="password">: WLAN - Passwort (max. 63 Zeichen) </label>
   <br>
 <h4>AccessPoint SSID UHU / 192.168.4.1 : </h4>
-<input type="checkbox" id="id_apActive" name="id_apActive" value="xx" checked="checked"
+<input type="checkbox" id="id_apActive" name="id_apActive" value="xx"
   onchange="sendNameValue(this.id, this.checked)" >
 <label for="id_apActive"> : AccessPoint mit SSID: UHU ist aktiv</label>
 <br>
@@ -99,9 +103,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "id_invertAmplitude",
     "nm_precisionAmplitude",
     "id_wlanSsid",
-    "id_wlanPasswd",
-    "id_apActive",
-    "id_apPasswd");
+    "id_apActive");
   </script>
   </html>
 )=====";
