@@ -6,8 +6,10 @@ const char MAIN_page[] PROGMEM = R"=====(
   <div>
   <h1>Winkelmesser zur Bestimmung von RC-Modell Einstelldaten</h1>
   <p>Version: <span id="id_version">0.10</span></p>
-  <button type="button" name="cmd_taraAngle" value="true" onclick="sendNameValue(this.name, this.value)">TARA</button> : Setzte Winkelmessung auf 0<br>
-  <input type="number" id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)" style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"> : Setzte Ruder-Tiefe</input>
+  <button type="button" name="cmd_taraAngle" value="true"
+     onclick="sendNameValue(this.name, this.value)">TARA</button> : Setzte Winkelmessung auf 0<br>
+  <input type="number" id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)"
+     style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"> : Setzte Ruder-Tiefe</input>
   </div>
   <div>
     <h2>Messung:</h2>

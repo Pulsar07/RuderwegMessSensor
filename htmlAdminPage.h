@@ -68,6 +68,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <input type="text" id="id_wlanPasswd" name="password" onchange="sendNameValue(this.id, this.value)" >
   <label for="password">: WLAN - Passwort (max. 63 Zeichen) </label>
   <br>
+<p>WLAN ist: <span id="id_wlanConnetion">nicht verbunden</span></p>
 <h4>AccessPoint SSID UHU / 192.168.4.1 : </h4>
 <input type="checkbox" id="id_apActive" name="id_apActive" value="xx" checked="checked"
   onchange="sendNameValue(this.id, this.checked)" >
@@ -101,7 +102,8 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "id_wlanSsid",
     "id_wlanPasswd",
     "id_apActive",
-    "id_apPasswd");
+    "id_apPasswd",
+    "id_wlanConnetion");
   </script>
   </html>
 )=====";

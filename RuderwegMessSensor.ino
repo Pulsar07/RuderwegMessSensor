@@ -36,7 +36,7 @@
 //         added support for precision and inverted values,
 //         including persistent config support (EEPROM),
 //         refactoring of AJAX procedures
-// V0.18 : bugfix : wrong calculation of rudderdepth from web GUI
+// V0.18 : bugfix : wrong calculation of rudderdepth from web
 #define WM_VERSION "V0.18"
 
 /**
@@ -440,6 +440,13 @@ void getDataReq() {
     if (argName.equals("id_invertAmplitude")) {
       if (ourConfig.amplitudeInversion == -1) {
         result += argName + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("id_wlanConnetion")) {
+      if (WiFi.status() == WL_CONNECTED) {
+        result += argName + "=" + "verbunden, zugewiesene Adresse: " + WiFi.localIP().toString() +  ";";
+      } else {
+        result += argName + "=" + "nicht verbunden;";
       }
     } else
     if (argName.equals("nm_referenceAxis")) {
