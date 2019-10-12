@@ -36,8 +36,12 @@
 //         added support for precision and inverted values,
 //         including persistent config support (EEPROM),
 //         refactoring of AJAX procedures
-// V0.18 : bugfix : wrong calculation of rudderdepth from web
-#define WM_VERSION "V0.18"
+// V0.18 : bugfix : wrong calculation of rudderdepth from web GUI
+// V0.19 : more bugfix : wifi, config page, new amplitude prec 0.01mm
+// V0.20 : bugfix : wrong setting of amplitude presision in admin page
+// V0.21 : show ip address of wlan in admin page,
+// V0.22 : fixed handling of starting AP, more client details in serial logging
+#define WM_VERSION "V0.21"
 
 /**
  * \file winkelmesser.ino
@@ -97,6 +101,9 @@ void setup()
   Serial.println();
   Serial.print("Starting RuderwegMessSensor :");
   Serial.println(WM_VERSION);
+
+  // check HW Pin 4 for HW Reset
+  // checkHWReset(5);
 
   loadConfig();
   showConfig("stored configuration:");
@@ -275,7 +282,8 @@ void setupWebServer() {
 }
 
 void HTMLrootPage() {
-  Serial.println("HTMLrootPage()");
+  Serial.print(server.client().remoteIP().toString());
+  Serial.println(" : HTMLrootPage()");
   checkHTMLArguments();
   String s = FPSTR(MAIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
@@ -283,7 +291,8 @@ void HTMLrootPage() {
 }
 
 void HTMLadminPage() {
-  Serial.println("HTMLadminPage()");
+  Serial.print(server.client().remoteIP().toString());
+  Serial.println(" : HTMLadminPage()");
   String s = FPSTR(ADMIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
   server.send(200, "text/html", s); //Send web page
@@ -291,7 +300,8 @@ void HTMLadminPage() {
 
 
 void setDataReq() {
-  Serial.println("setDataReq()");
+  Serial.print(server.client().remoteIP().toString());
+  Serial.println(" : setDataReq()");
   String name = server.arg("name");
   String value = server.arg("value");
   Serial.print("  "); Serial.print(name); Serial.print("="); Serial.println(value);
@@ -348,7 +358,9 @@ void setDataReq() {
     Serial.println("setting angle precision: " + String(ourConfig.anglePrecision));
   } else
   if ( name == "nm_precisionAmplitude") {
-    if (value == "P010") {
+    if (value == "P001") {
+      ourConfig.amplitudePrecision = P001;
+    } else if (value == "P010") {
       ourConfig.amplitudePrecision = P010;
     } else if (value == "P050") {
       ourConfig.amplitudePrecision = P050;
@@ -393,12 +405,8 @@ void setDataReq() {
 
 
 void getDataReq() {
-  // element ids:
-  //   angleValue
-  //   amplitudeValue
-  //   rudderDepth , input type text
-
-  Serial.print("getDataReq() :");
+  Serial.print(server.client().remoteIP().toString());
+  Serial.print(" : getDataReq() :");
   String result;
   for (uint8_t i=0; i<server.args(); i++){
     // message += " NAME:"+server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
@@ -470,11 +478,13 @@ void getDataReq() {
       }
     } else
     if (argName.equals("nm_precisionAmplitude")) {
-      if (ourConfig.amplitudePrecision == P010) {
+      if (ourConfig.amplitudePrecision == P001) {
+        result += String("id_amplPrec_P001") + "=" + "checked;";
+      } else if (ourConfig.amplitudePrecision == P010) {
         result += String("id_amplPrec_P010") + "=" + "checked;";
       } else if (ourConfig.amplitudePrecision == P050) {
         result += String("id_amplPrec_P050") + "=" + "checked;";
-      } else {
+      } else if (ourConfig.amplitudePrecision == P100) {
         result += String("id_amplPrec_P100") + "=" + "checked;";
       }
     } else
@@ -497,6 +507,9 @@ void getDataReq() {
 void handleWebRequests(){
   // if(loadFromSpiffs(server.uri())) return;
   String message = "File Not Detected\n\n";
+
+  message += "client : ";
+  message += server.client().remoteIP().toString();
   message += "URI: ";
   message += server.uri();
   message += "\nMethod: ";
@@ -553,9 +566,9 @@ float roundToDot5(double aValue) {
 void setupWiFi() {
   // first try to connect to the stored WLAN, if this does not work try to
   // start as Access Point
-  WiFi.mode(WIFI_AP_STA) ; // client mode only
 
   if (String(ourConfig.wlanSsid).length() != 0 ) {
+    WiFi.mode(WIFI_STA) ; // client mode only
     WiFi.begin(ourConfig.wlanSsid, ourConfig.wlanPasswd);
 
     Serial.println();
@@ -575,6 +588,7 @@ void setupWiFi() {
   } else {
     Serial.print("cannot connect to SSID ");
     Serial.println(ourConfig.wlanSsid);
+    WiFi.mode(WIFI_AP) ; // client mode only
   }
   if (ourConfig.apIsActive) {
     Serial.print("Starting WiFi Access Point with  SSID: ");
@@ -686,4 +700,18 @@ void loadConfig() {
   if ( String(CONFIG_VERSION) != ourConfig.version ) {
     setDefautConfig();
   }
+}
+
+void checkHWReset(uint8_t aPin) {
+  // pull the given pin
+  Serial.print("checking HW reset pin ");
+    Serial.print(aPin);
+    Serial.println(" for force HW config reset");
+  pinMode(aPin, INPUT);
+  delay(100);
+  if (digitalRead(aPin) == LOW) {
+    Serial.println("HW reset detected.");
+    // setDefautConfig();
+  }
+
 }

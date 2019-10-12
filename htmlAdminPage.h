@@ -45,6 +45,10 @@ const char ADMIN_page[] PROGMEM = R"=====(
     onchange="sendNameValue(this.id, this.checked)">
   <label for="id_invertAmplitude"> : Invertiere die Weganzeige (+/-)</label>
   <br>
+  <input type="radio" id="id_amplPrec_P001" name="nm_precisionAmplitude" value="P001"
+    onchange="sendNameValue(this.name, this.value)" >
+  <label for="id_amplPrec_P001"> : 0.01 mm-Anzeige-Genauigkeit</label>
+  <br>
   <input type="radio" id="id_amplPrec_P010" name="nm_precisionAmplitude" value="P010"
     onchange="sendNameValue(this.name, this.value)" >
   <label for="id_amplPrec_P010"> : 0.1 mm-Anzeige-Genauigkeit</label>
@@ -59,7 +63,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <br>
   <hr>
   <h3>WiFi - Einstellungen</h3>
-  <p>&Auml;nderungen des WiFi-Einstellungen müssen zuerst gespeichert werden und wirken sich erst nach Neustart aus.</p>
+  <p>&Auml;nderungen des WiFi-Einstellungen m&uuml;ssen zuerst gespeichert werden und wirken sich erst nach Neustart aus.</p>
   <div>
   <h4>Zugangsdaten zur Verbindung mit WLAN:</h4>
   <input type="text" id="id_wlanSsid" name="ssid" onchange="sendNameValue(this.id, this.value)">
@@ -70,7 +74,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <br>
 <p>WLAN ist: <span id="id_wlanConnetion">nicht verbunden</span></p>
 <h4>AccessPoint SSID UHU / 192.168.4.1 : </h4>
-<input type="checkbox" id="id_apActive" name="id_apActive" value="xx" checked="checked"
+<input type="checkbox" id="id_apActive" name="id_apActive" value="xx"
   onchange="sendNameValue(this.id, this.checked)" >
 <label for="id_apActive"> : AccessPoint mit SSID: UHU ist aktiv</label>
 <br>
@@ -100,9 +104,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "id_invertAmplitude",
     "nm_precisionAmplitude",
     "id_wlanSsid",
-    "id_wlanPasswd",
     "id_apActive",
-    "id_apPasswd",
     "id_wlanConnetion");
   </script>
   </html>
