@@ -38,7 +38,9 @@
 //         refactoring of AJAX procedures
 // V0.18 : bugfix : wrong calculation of rudderdepth from web GUI
 // V0.19 : more bugfix : wifi, config page, new amplitude prec 0.01mm
-#define WM_VERSION "V0.19"
+// V0.20 : bugfix : wrong setting of amplitude presision in admin page
+#define WM_VERSION "V0.20"
+
 
 /**
  * \file winkelmesser.ino
@@ -466,11 +468,13 @@ void getDataReq() {
       }
     } else
     if (argName.equals("nm_precisionAmplitude")) {
-      if (ourConfig.amplitudePrecision == P010) {
+      if (ourConfig.amplitudePrecision == P001) {
+        result += String("id_amplPrec_P001") + "=" + "checked;";
+      } else if (ourConfig.amplitudePrecision == P010) {
         result += String("id_amplPrec_P010") + "=" + "checked;";
       } else if (ourConfig.amplitudePrecision == P050) {
         result += String("id_amplPrec_P050") + "=" + "checked;";
-      } else {
+      } else if (ourConfig.amplitudePrecision == P100) {
         result += String("id_amplPrec_P100") + "=" + "checked;";
       }
     } else
