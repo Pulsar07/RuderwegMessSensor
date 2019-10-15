@@ -6,6 +6,7 @@
 #include "htmlRootPage.h"
 #include "htmlAdminPage.h"
 #include "htmlScript.h"
+#include "htmlCSS.h"
 
 /*
   !! create a file "myWifiSettings" with the following content:
@@ -41,7 +42,10 @@
 // V0.20 : bugfix : wrong setting of amplitude presision in admin page
 // V0.21 : show ip address of wlan in admin page,
 // V0.22 : fixed handling of starting AP, more client details in serial logging
-#define WM_VERSION "V0.21"
+// V0.23 : support for reset to default config when connecting D5 with GRD while startup
+//         support flight phase supporting measure with null, min, max values
+//         CSS based layout added
+#define WM_VERSION "V0.23"
 
 /**
  * \file winkelmesser.ino
@@ -88,6 +92,10 @@ static double ourTaraGyro_y = 0;
 static double ourTaraGyro_z = 0;
 static double ourRudderDepth = 30;
 
+static float ourNullAmpl;
+static float ourMinAmpl;
+static float ourMaxAmpl;
+static boolean ourIsMeasureActive=false;
 
 const char* ap_ssid = "UHU";
 
@@ -103,13 +111,14 @@ void setup()
   Serial.println(WM_VERSION);
 
   // check HW Pin 4 for HW Reset
-  // checkHWReset(5);
+  checkHWReset(D5);
 
   loadConfig();
   showConfig("stored configuration:");
 
   #ifdef SUPPORT_MPU6050
-     Wire.begin();
+     // Wire.begin();
+     Wire.begin(0, 2); //SDA, SCL
      Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
      Wire.write(0x6B); // PWR_MGMT_1 register
      Wire.write(0); // set to zero (wakes up the MPU-6050)
@@ -230,6 +239,15 @@ float getRoundedAmplitude() {
   return roundPrecision(getAmplitude(getAngle()), ourConfig.amplitudePrecision);
 }
 
+float getRudderAmplitude() {
+  float ampl = getRoundedAmplitude();
+  if (ourIsMeasureActive) {
+    ourMinAmpl = min(ourMinAmpl, ampl);
+    ourMaxAmpl = max(ourMaxAmpl, ampl);
+  }
+  return ampl;
+}
+
 float roundPrecision(double aVal, precision_t aPrecision) {
   float res = aVal;
   switch(aPrecision) {
@@ -266,6 +284,17 @@ void taraAngle() {
   Serial.println("tara angle set to :" + String(ourTara));
 }
 
+void flightPhaseMeasure(boolean aStart) {
+  Serial.println(String("flightPhaseMeasure(")+aStart+")");
+  if (aStart) {
+    ourNullAmpl = getRudderAmplitude();
+    ourMinAmpl = ourMaxAmpl = ourNullAmpl;
+    ourIsMeasureActive=true;
+  } else {
+    ourIsMeasureActive=false;
+  }
+}
+
 // =================================
 // web server functions
 // =================================
@@ -287,6 +316,7 @@ void HTMLrootPage() {
   checkHTMLArguments();
   String s = FPSTR(MAIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
+  s.replace("###<CSS>###", FPSTR(CSS));
   server.send(200, "text/html", s); //Send web page
 }
 
@@ -295,6 +325,7 @@ void HTMLadminPage() {
   Serial.println(" : HTMLadminPage()");
   String s = FPSTR(ADMIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
+  s.replace("###<CSS>###", FPSTR(CSS));
   server.send(200, "text/html", s); //Send web page
 }
 
@@ -310,6 +341,13 @@ void setDataReq() {
   String retVal = "";
   if ( name == "cmd_taraAngle") {
     taraAngle();
+  } else
+  if ( name == "cmd_flightphaseActive") {
+    if (value == "true") {
+      flightPhaseMeasure(true);
+    } else {
+      flightPhaseMeasure(false);
+    }
   } else
   if ( name == "id_rudderDepth") {
     ourRudderDepth = double(atoi(value.c_str()))/10;
@@ -389,7 +427,6 @@ void setDataReq() {
      showConfig("==== before");
      saveConfig();
      showConfig("==== after");
-     sendResponse = false;
   } else
   if (name == "cmd_resetConfig") {
      Serial.println("before reset");
@@ -417,7 +454,14 @@ void getDataReq() {
       result += argName + "=" + String(getRoundedAngle()) + ";";
     } else
     if (argName.equals("id_amplitudeValue")) {
-      result += argName + "=" + String(getRoundedAmplitude()) + ";";
+      result += argName + "=" + String(getRudderAmplitude()) + ";";
+    } else
+    if (argName.equals("cpx_flightphase")) {
+      if (ourIsMeasureActive) {
+        result += String("id_ruddernull") + "=" + String(ourNullAmpl) + ";";
+        result += String("id_ruddermin" ) + "=" + String(ourMinAmpl) + ";";
+        result += String("id_ruddermax" ) + "=" + String(ourMaxAmpl) + ";";
+      }
     } else
     if (argName.equals("id_rudderDepth")) {
       result += argName + "=" + ourRudderDepth + ";";
@@ -685,7 +729,7 @@ void saveConfig() {
   // Save configuration from RAM into EEPROM
   EEPROM.begin(512);
   EEPROM.put(0, ourConfig );
-  delay(200);
+  delay(10);
   EEPROM.commit();                      // Only needed for ESP8266 to get data written
   EEPROM.end();                         // Free RAM copy of structure
 }

@@ -31,5 +31,12 @@
 *.out
 *.app
 
+# Arduino stuff
+*.bin
+*.eep
+*.elf
+*.hex
 # private stuff
 myWifiSettings.h
+mySettings.h
+tmp/*
