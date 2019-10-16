@@ -7,30 +7,12 @@ const char MAIN_page[] PROGMEM = R"=====(
   <body>
   <div class="container">
   <h1>Winkelmesser zur Bestimmung von RC-Modell Einstelldaten</h1>
-  <p>Version: <span id="id_version">0.10</span></p>
-  <div class="row">
-    <div class="col-25">
-      <button type="button" id="id_tara" name="cmd_taraAngle" value="true"
-         onclick="sendNameValue(this.name, this.value)">TARA</button>
-    </div>
-    <div class="col-75">
-      <label for="id_invertAmplitude">Setzte Winkelmessung auf 0</label>
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-25">
-      <input type="number" id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)"
-         style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"></input>
-    </div>
-    <div class="col-75">
-      <label for="id_rudderDepth">Setzte Ruder-Tiefe in mm</label>
-    </div>
-  </div>
-
-  </div class="container">
+  <p class="version">Version: <span id="id_version">0.10</span></p>
   <hr>
+  </div class="container">
   <div class="container">
     <h2>Aktuelle Messwerte:</h2>
+    <p>Sensortyp: &lt;<span id="id_sensortype"></span>&gt;</p>
   <div class="row">
     <div class="col-25">
 	    <label class=measureValue id="id_angle">  <span id="id_angleValue">0</span>&deg;</label>
@@ -47,9 +29,26 @@ const char MAIN_page[] PROGMEM = R"=====(
       <label class=measureValue for="id_angle">Ruderweg</label>
     </div>
   </div>
-  </div class="container">
+  <div class="row">
+    <div class="col-25">
+      <button type="button" id="id_tara" name="cmd_taraAngle" value="true"
+         onclick="sendNameValue(this.name, this.value)">TARA</button>
+    </div>
+    <div class="col-75">
+      <label for="id_invertAmplitude">Setzte Messwerte auf 0</label>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-25">
+      <input type="number" id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)"
+         style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"></input>
+    </div>
+    <div class="col-75">
+      <label for="id_rudderDepth">Setzte Ruder-Tiefe in mm</label>
+    </div>
+  </div>
+
   <hr>
-  <div class="container">
   <h2>Min-/Max-Ruderweg-Messung:</h2>
   <div class="row">
     <div class="col-25">
@@ -99,10 +98,7 @@ const char MAIN_page[] PROGMEM = R"=====(
       </label>
     </div>
   </div>
-  </div class="container">
-
   <hr>
-  <div class="container">
   <div class="row">
     <div class="col-25">
       <button type="button" id="id_settings" onclick="window.location.href='/adminPage'">Einstellungen &auml;ndern</button>
@@ -121,7 +117,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     // Call a function repetatively with 2 Second interval
     getData("id_angleValue", "id_amplitudeValue", "cpx_flightphase" );
   }, 1000); //2000mSeconds update rate
-  getData("id_version", "id_rudderDepth");
+  getData("id_version", "id_rudderDepth", "id_sensortype");
   </script>
   </body>
   </html>

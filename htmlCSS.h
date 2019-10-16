@@ -51,6 +51,9 @@ const char CSS[] PROGMEM = R"=====(
       font-weight:bold;
     }
 
+    .version {
+      text-align: right;
+    }
 
     .col-25 {
       text-align: left;

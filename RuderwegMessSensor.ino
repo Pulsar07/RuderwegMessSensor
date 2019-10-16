@@ -19,9 +19,7 @@
 */
 #include "mySettings.h"
 
-#ifdef SUPPORT_MMA8451
 #include <Adafruit_MMA8451.h>         // MMA8451 library
-#endif
 
 // Version history
 // V0.10 : full functional initial version
@@ -45,7 +43,8 @@
 // V0.23 : support for reset to default config when connecting D5 with GRD while startup
 //         support flight phase supporting measure with null, min, max values
 //         CSS based layout added
-#define WM_VERSION "V0.23"
+// V0.24 : automatic dedection of I2C ports and sensor type
+#define WM_VERSION "V0.24"
 
 /**
  * \file winkelmesser.ino
@@ -60,12 +59,7 @@
  *
  */
 
-#ifdef SUPPORT_MPU6050
-const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
-#endif
-#ifdef SUPPORT_MMA8451
-Adafruit_MMA8451 mma = Adafruit_MMA8451();
-#endif
+static Adafruit_MMA8451 mma;
 
 
 #ifdef SUPPORT_OLED
@@ -74,6 +68,14 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* c
 #endif
 
 static configData_t ourConfig;
+
+static const uint8_t MPU6050ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
+static const uint8_t MMA8451ADDR = 0x1D; // I2C address of the MMA-8451. If AD0 pin is set to LOW, the I2C address will be 0x1C.
+static uint8_t ourSCL_Pin;
+static uint8_t ourSDA_Pin;
+static uint8_t ourI2CAddr;
+static String ourSensorType;
+
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
@@ -116,18 +118,23 @@ void setup()
   loadConfig();
   showConfig("stored configuration:");
 
-  #ifdef SUPPORT_MPU6050
-     // Wire.begin();
-     Wire.begin(0, 2); //SDA, SCL
-     Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
+  checkSensor();
+
+  if (ourI2CAddr == MPU6050ADDR) {
+
+     Wire.begin(ourSCL_Pin, ourSDA_Pin); //SDA, SCL
+     Wire.beginTransmission(ourI2CAddr); // Begins a transmission to the I2C slave (GY-521 board)
      Wire.write(0x6B); // PWR_MGMT_1 register
      Wire.write(0); // set to zero (wakes up the MPU-6050)
      Wire.endTransmission(true);
-  #endif
-  #ifdef SUPPORT_MMA8451
+  } else if (ourI2CAddr == MMA8451ADDR) {
+    mma = Adafruit_MMA8451();
+
+    // Adafruit_MMA8451 does not support different I2C pins ;-((
+    // mma.begin(ourSCL_Pin, ourSDA_Pin);
     mma.begin();
     mma.setRange(MMA8451_RANGE_2_G);
-  #endif
+  }
 
   #ifdef SUPPORT_OLED
     u8g2.begin();
@@ -158,11 +165,11 @@ void loop()
 // =================================
 void readMotionSensor() {
 
-  #ifdef SUPPORT_MPU6050
-    Wire.beginTransmission(MPU_ADDR);
+  if (ourI2CAddr == MPU6050ADDR) {
+    Wire.beginTransmission(ourI2CAddr);
     Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
     Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
-    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
+    Wire.requestFrom(ourI2CAddr, 7*2, true); // request a total of 7*2=14 registers
 
     // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
     ourAccelerometer_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x3B (ACCEL_XOUT_H) and 0x3C (ACCEL_XOUT_L)
@@ -172,13 +179,13 @@ void readMotionSensor() {
     gyro_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x43 (GYRO_XOUT_H) and 0x44 (GYRO_XOUT_L)
     gyro_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x45 (GYRO_YOUT_H) and 0x46 (GYRO_YOUT_L)
     gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
-  #endif
-  #ifdef SUPPORT_MMA8451
+  } else
+  if (ourI2CAddr == MMA8451ADDR) {
     mma.read();
     ourAccelerometer_x = mma.x;
     ourAccelerometer_y = mma.y;
     ourAccelerometer_z = mma.z;
-  #endif
+  }
 
   const static double smooth = 0.98d;
   // print out data
@@ -469,6 +476,9 @@ void getDataReq() {
     if (argName.equals("id_version")) {
       result += argName + "=" + WM_VERSION + ";";
     } else
+    if (argName.equals("id_sensortype")) {
+      result += argName + "=" + ourSensorType + ";";
+    } else
     if (argName.equals("id_wlanSsid")) {
       if (String(ourConfig.wlanSsid).length() != 0) {
         result += argName + "=" + ourConfig.wlanSsid + ";";
@@ -602,6 +612,49 @@ float roundToDot5(double aValue) {
   return round(aValue * 2)/2;
 }
 
+void checkSensor() {
+
+  // supported I2C HW connections schemas
+  uint8_t cableConnections[2][2] = {
+   {D3, D4} ,   /* SCL, SDA */
+   {D1, D2}    /* SCL, SDA */
+  };
+
+  // supported I2C devices / addresses
+  uint8_t I2CAddresses[2] = {
+    MPU6050ADDR, MMA8451ADDR
+  };
+
+
+  for (int i = 0; i < 2; i++) {
+    ourSCL_Pin = cableConnections[i][0];
+    ourSDA_Pin = cableConnections[i][1];
+    Wire.begin(ourSCL_Pin, ourSDA_Pin);
+    for (int j = 0; j<2; j++) {
+      ourI2CAddr = I2CAddresses[j];
+      Wire.beginTransmission(ourI2CAddr);
+      byte result = Wire.endTransmission();
+      if (result == 0){
+        if (ourI2CAddr == MPU6050ADDR) {
+          ourSensorType = "MPU-6050/GY521";
+        }
+        if (ourI2CAddr == MMA8451ADDR) {
+          ourSensorType = "MMA-8451";
+        }
+        Serial.print("Sensor [");
+        Serial.print(ourSensorType);
+        Serial.print("] found at I2C pins ");
+        Serial.print(ourSCL_Pin);
+        Serial.print("/");
+        Serial.print(ourSDA_Pin);
+        Serial.print(" (SCL/SDA) at address 0x");
+        Serial.print(ourI2CAddr, HEX);
+        Serial.println();
+        return;
+      }
+    }
+  }
+}
 
 // =================================
 // WiFi functions
