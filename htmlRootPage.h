@@ -45,7 +45,7 @@ const char MAIN_page[] PROGMEM = R"=====(
          style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"></input>
     </div>
     <div class="col-75">
-      <label for="id_rudderDepth">Setzte Ruder-Tiefe in mm</label>
+      <label for="id_rudderDepth">Setze Rudertiefe in mm</label>
     </div>
   </div>
 

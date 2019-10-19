@@ -10,7 +10,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <h1>Winkelmesser zur Bestimmung von RC-Modell Einstelldaten</h1>
   <p>Version: <span id="id_version">0.10</span></p>
 
-  <h2>Einstellungen f&uuml;r den RuderwegMessSensor</h2>
+  <h2>Einstellungen f&uuml;r den Ruderweg-Messsensor</h2>
 
   <hr>
   <h3>Winkel - Einstellungen:</h3>
@@ -267,7 +267,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
      </label>
     </div>
   </div>
-  <p>Alle &Auml;derungen wirken sich sofort aus und k&ouml;nnen mit dem &quot;Zur&uuml;ck&quot;-Button benutzt/getestet werden. Ausnahmen sind WiFi-Daten, die sich erst nach &quot;Speichern&quot; und &quot;Neustart&quot; auswirken.</p>
+  <p>Alle &Auml;nderungen wirken sich sofort aus und k&ouml;nnen mit dem &quot;Zur&uuml;ck&quot;-Button benutzt/getestet werden. Ausnahmen sind WiFi-Daten, die sich erst nach &quot;Speichern&quot; und &quot;Neustart&quot; auswirken.</p>
   <p>Sollen Einstellungen (auch Kalibrierung) nach einem Neustart erhalten bleiben, muss auf jeden Fall &quot;Speichern&quot; geklickt werden.</p>
   </div>
 </div>
