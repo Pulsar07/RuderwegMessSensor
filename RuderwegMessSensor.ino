@@ -8,18 +8,12 @@
 #include "htmlScript.h"
 #include "htmlCSS.h"
 
-/*
-  !! create a file "myWifiSettings" with the following content:
-      // select on of these supported sensors connceted via I2C to D1 (SCL), D2 (SDA)
-      // #define SUPPORT_MMA8451
-      // #define SUPPORT_MPU6050
-
-      // a additional local connected for OLED display
-      // #define SUPPORT_OLED
-*/
-#include "mySettings.h"
-
 #include <Adafruit_MMA8451.h>         // MMA8451 library
+
+// I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
+// for both classes must be in the include path of your project
+#include "I2Cdev.h"
+#include "MPU6050.h"
 
 // Version history
 // V0.10 : full functional initial version
@@ -44,7 +38,9 @@
 //         support flight phase supporting measure with null, min, max values
 //         CSS based layout added
 // V0.24 : automatic dedection of I2C ports and sensor type
-#define WM_VERSION "V0.24"
+// V0.25 : added calibration of MPU6050 in admin page and add values to persitent config data
+//         after calibration the MPU6050 is accurate < 0.5° at a range of +-45°
+#define WM_VERSION "V0.25"
 
 /**
  * \file winkelmesser.ino
@@ -60,6 +56,7 @@
  */
 
 static Adafruit_MMA8451 mma;
+static MPU6050 mpu;
 
 
 #ifdef SUPPORT_OLED
@@ -75,6 +72,8 @@ static uint8_t ourSCL_Pin;
 static uint8_t ourSDA_Pin;
 static uint8_t ourI2CAddr;
 static String ourSensorType;
+static boolean ourTriggerCalibrateMPU6050 = false;
+static boolean ourTriggerRestart = false;
 
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
@@ -118,15 +117,12 @@ void setup()
   loadConfig();
   showConfig("stored configuration:");
 
-  checkSensor();
+  dedectSensor();
 
   if (ourI2CAddr == MPU6050ADDR) {
-
      Wire.begin(ourSCL_Pin, ourSDA_Pin); //SDA, SCL
-     Wire.beginTransmission(ourI2CAddr); // Begins a transmission to the I2C slave (GY-521 board)
-     Wire.write(0x6B); // PWR_MGMT_1 register
-     Wire.write(0); // set to zero (wakes up the MPU-6050)
-     Wire.endTransmission(true);
+     // initialize device
+     initMPU5060();
   } else if (ourI2CAddr == MMA8451ADDR) {
     mma = Adafruit_MMA8451();
 
@@ -150,6 +146,7 @@ void loop()
   server.handleClient();
 
   readMotionSensor();
+  doAsync();
   if ( (millis() - last) > 1000) {
     prepareMotionData();
     #ifdef SUPPORT_OLED
@@ -165,20 +162,8 @@ void loop()
 // =================================
 void readMotionSensor() {
 
-  if (ourI2CAddr == MPU6050ADDR) {
-    Wire.beginTransmission(ourI2CAddr);
-    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
-    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
-    Wire.requestFrom(ourI2CAddr, 7*2, true); // request a total of 7*2=14 registers
-
-    // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
-    ourAccelerometer_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x3B (ACCEL_XOUT_H) and 0x3C (ACCEL_XOUT_L)
-    ourAccelerometer_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x3D (ACCEL_YOUT_H) and 0x3E (ACCEL_YOUT_L)
-    ourAccelerometer_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x3F (ACCEL_ZOUT_H) and 0x40 (ACCEL_ZOUT_L)
-    temperature = Wire.read()<<8 | Wire.read(); // reading registers: 0x41 (TEMP_OUT_H) and 0x42 (TEMP_OUT_L)
-    gyro_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x43 (GYRO_XOUT_H) and 0x44 (GYRO_XOUT_L)
-    gyro_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x45 (GYRO_YOUT_H) and 0x46 (GYRO_YOUT_L)
-    gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
+  if (ourI2CAddr == MPU6050ADDR ) { // read raw accel/gyro measurements from device
+    mpu.getMotion6(&ourAccelerometer_x, &ourAccelerometer_y, &ourAccelerometer_z, &gyro_x, &gyro_y, &gyro_z);
   } else
   if (ourI2CAddr == MMA8451ADDR) {
     mma.read();
@@ -346,6 +331,7 @@ void setDataReq() {
   boolean sendResponse = true;
 
   String retVal = "";
+  int htmlResponseCode=200; // OK
   if ( name == "cmd_taraAngle") {
     taraAngle();
   } else
@@ -427,23 +413,30 @@ void setDataReq() {
       strncpy(ourConfig.apPasswd, value.c_str(), CONFIG_PASSW_L);
       Serial.println("setting AP password : " + String(ourConfig.apPasswd));
     } else {
-      Serial.println("not setting AP password, too short : " + String(ourConfig.apPasswd));
+      Serial.println("not setting AP password, too short. Old PW : " + String(ourConfig.apPasswd));
     }
   } else
   if (name == "cmd_saveConfig") {
-     showConfig("==== before");
      saveConfig();
-     showConfig("==== after");
   } else
   if (name == "cmd_resetConfig") {
-     Serial.println("before reset");
      setDefautConfig();
-     showConfig("==== after");
+  } else
+  if (name == "cmd_mcrestart") {
+    Serial.println("resetting micro controller");
+    triggerRestart();
+  } else
+  if (name == "cmd_calibrate") {
+    if (ourI2CAddr == MPU6050ADDR) {
+      Serial.println("triggering calibration");
+      triggerCalibrteMPU6050();
+    }
   }
 
   if (sendResponse) {
-    Serial.println("send response to server");
-    server.send(200, "text/plane", retVal); // send an valid answer
+    Serial.print("send response to server: ");
+    Serial.println(retVal);
+    server.send(htmlResponseCode, "text/plane", retVal); // send an valid answer
   }
 }
 
@@ -480,14 +473,10 @@ void getDataReq() {
       result += argName + "=" + ourSensorType + ";";
     } else
     if (argName.equals("id_wlanSsid")) {
-      if (String(ourConfig.wlanSsid).length() != 0) {
         result += argName + "=" + ourConfig.wlanSsid + ";";
-      }
     } else
     if (argName.equals("id_wlanPasswd")) {
-      if (String(ourConfig.wlanPasswd).length() != 0) {
         result += argName + "=" + "************;";
-      }
     } else
     if (argName.equals("id_apPasswd")) {
       if (String(ourConfig.apPasswd).length() != 0) {
@@ -509,6 +498,17 @@ void getDataReq() {
         result += argName + "=" + "verbunden, zugewiesene Adresse: " + WiFi.localIP().toString() +  ";";
       } else {
         result += argName + "=" + "nicht verbunden;";
+      }
+    } else
+    if (argName.equals("id_resp_calibrate")) {
+      if (!isSensorCalibrated()) {
+        result += argName + "=" + "Sensor ist nicht kalibriert;";
+      } else {
+      if ( ourTriggerCalibrateMPU6050 ) {
+        result += argName + "=" + "Kalibrierung gestartet ...;";
+      } else {
+        result += argName + "=" + "Sensor ist kalibriert;";
+      }
       }
     } else
     if (argName.equals("nm_referenceAxis")) {
@@ -612,12 +612,80 @@ float roundToDot5(double aValue) {
   return round(aValue * 2)/2;
 }
 
-void checkSensor() {
+void printMPU5060Offsets() {
+   Serial.print("X Accel Offset: ");
+   Serial.print(mpu.getXAccelOffset());
+   Serial.print(", Y Accel Offset: ");
+   Serial.print(mpu.getYAccelOffset());
+   Serial.print(", Z Accel Offset: ");
+   Serial.print(mpu.getZAccelOffset());
+   Serial.println();
+}
+
+void initMPU5060() {
+
+   Serial.println("Initializing MPU6050 device");
+   mpu.initialize();
+   Serial.println("Testing device connections...");
+   if (mpu.testConnection()) {
+      Serial.println("MPU6050 connection successful");
+    } else {
+      Serial.println("MPU6050 connection failed");
+      delay(10000);
+    }
+    if (isSensorCalibrated) {
+      // set stored calibration data
+     mpu.setXAccelOffset(ourConfig.xAccelOffset);
+     mpu.setYAccelOffset(ourConfig.yAccelOffset);
+     mpu.setZAccelOffset(ourConfig.zAccelOffset);
+     Serial.println("MPU6050 ist kalibriert mit folgenden Werten: ");
+     printMPU5060Offsets();
+   } else {
+     Serial.println("MPU6050 ist nicht kalibriert !!!!");
+   }
+}
+
+void triggerRestart() {
+  ourTriggerRestart = true;
+}
+
+void restartESP() {
+  if (ourTriggerRestart) {
+    ourTriggerRestart = false;
+    ESP.restart();
+  }
+}
+void triggerCalibrteMPU6050() {
+  ourTriggerCalibrateMPU6050 = true;
+}
+
+boolean isSensorCalibrated() {
+  return !(ourConfig.xAccelOffset == 0 & ourConfig.yAccelOffset == 0 & ourConfig.zAccelOffset == 0);
+}
+
+void calibrateMPU6050() {
+  if (ourTriggerCalibrateMPU6050 == true) {
+    printMPU5060Offsets();
+    mpu.CalibrateAccel(16);
+    ourConfig.xAccelOffset = mpu.getXAccelOffset();
+    ourConfig.yAccelOffset = mpu.getYAccelOffset();
+    ourConfig.zAccelOffset = mpu.getZAccelOffset();
+    printMPU5060Offsets();
+    ourTriggerCalibrateMPU6050 = false;
+  }
+}
+
+void doAsync() {
+  calibrateMPU6050();
+  restartESP();
+}
+
+void dedectSensor() {
 
   // supported I2C HW connections schemas
   uint8_t cableConnections[2][2] = {
    {D3, D4} ,   /* SCL, SDA */
-   {D1, D2}    /* SCL, SDA */
+   {D2, D1}    /* SCL, SDA */
   };
 
   // supported I2C devices / addresses
@@ -683,7 +751,7 @@ void setupWiFi() {
     Serial.print("IP Address is: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.print("cannot connect to SSID ");
+    Serial.print("cannot connect to SSID :");
     Serial.println(ourConfig.wlanSsid);
     WiFi.mode(WIFI_AP) ; // client mode only
   }
@@ -757,11 +825,15 @@ void showConfig(char* aContext) {
   Serial.print("wlanSsid            = "); Serial.println(ourConfig.wlanSsid);
   Serial.print("wlanPasswd          = "); Serial.println(ourConfig.wlanPasswd);
   Serial.print("apPasswd            = "); Serial.println(ourConfig.apPasswd);
+  Serial.print("xAccelOffet         = "); Serial.println(ourConfig.xAccelOffset);
+  Serial.print("yAccelOffet         = "); Serial.println(ourConfig.yAccelOffset);
+  Serial.print("zAccelOffet         = "); Serial.println(ourConfig.zAccelOffset);
 }
 
 void setDefautConfig() {
   Serial.println("setDefaultConfig()");
   // Reset EEPROM bytes to '0' for the length of the data structure
+  showConfig("setDefaultConfig() - old data:");
   ourConfig.axis = xAxis;
   strncpy(ourConfig.version , CONFIG_VERSION, CONFIG_VERSION_L);
   ourConfig.axis = xAxis;
@@ -773,18 +845,23 @@ void setDefautConfig() {
   strncpy(ourConfig.wlanSsid , "", CONFIG_SSID_L);
   strncpy(ourConfig.wlanPasswd, "", CONFIG_PASSW_L);
   strncpy(ourConfig.apPasswd, "12345678", CONFIG_PASSW_L);
+  ourConfig.xAccelOffset = 0;
+  ourConfig.yAccelOffset = 0;
+  ourConfig.zAccelOffset = 0;
   saveConfig();
 }
 
 
 void saveConfig() {
   Serial.println("saveConfig()");
+  showConfig("saveConfig - start");
   // Save configuration from RAM into EEPROM
   EEPROM.begin(512);
   EEPROM.put(0, ourConfig );
   delay(10);
   EEPROM.commit();                      // Only needed for ESP8266 to get data written
   EEPROM.end();                         // Free RAM copy of structure
+  showConfig("saveConfig - end");
 }
 
 void loadConfig() {
@@ -802,13 +879,20 @@ void loadConfig() {
 void checkHWReset(uint8_t aPin) {
   // pull the given pin
   Serial.print("checking HW reset pin ");
-    Serial.print(aPin);
-    Serial.println(" for force HW config reset");
-  pinMode(aPin, INPUT);
+  Serial.print(aPin);
+  Serial.println(" for force HW config reset");
+  pinMode(aPin, INPUT_PULLUP);
   delay(100);
-  if (digitalRead(aPin) == LOW) {
-    Serial.println("HW reset detected.");
-    // setDefautConfig();
+  uint8_t cnt=0;
+  for (int i=0; i<10; i++) {
+    delay(20);
+    if (digitalRead(aPin) == LOW) {
+      cnt++;
+    }
   }
-
+  if (cnt == 10) {
+    Serial.print("configurtion reset by HW pin to GRD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ");
+    // Serial.println(cnt);
+    setDefautConfig();
+  }
 }

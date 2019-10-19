@@ -32,6 +32,9 @@ typedef struct {
   char wlanPasswd[CONFIG_PASSW_L];
   char apPasswd[CONFIG_PASSW_L];
   boolean apIsActive;
+  int16_t xAccelOffset;
+  int16_t yAccelOffset;
+  int16_t zAccelOffset;
 } configData_t;
 
 

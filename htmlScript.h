@@ -1,8 +1,34 @@
 const char SCRIPT[] PROGMEM = R"=====(
   <script>
-  function sendNameValue(aName, aValue) {
+
+  function setElementValue(aId, aValue) {
+    var htmlElement = document.getElementById(aId);
+    htmlElement.innerHTML = aValue;
+  }
+
+  function pollData(aId, aCount) {
+    if( typeof pollData.counter == 'undefined' ) {
+      pollData.counter = 0;
+    }
+    if (aCount < pollData.counter++) {
+      getData(aId);
+      setTimeout(pollData, 1000, aId, aCount);
+    }
+  }
+
+  function sendValueForId(aId) {
+    var value = document.getElementById(aId).value;
+    if (value.length != 0) {
+      sendNameValue(aId, value);
+    }
+  }
+
+  function sendNameValue(aId, aValue) {
+    if (aValue == "NA") {
+        aValue=document.getElementById(aId).value;
+    }
     var xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "setDataReq?name="+aName+"&value="+aValue, true);
+    xhttp.open("GET", "setDataReq?name="+aId+"&value="+aValue, true);
     xhttp.send();
   }
 

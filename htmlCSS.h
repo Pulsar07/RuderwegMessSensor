@@ -5,7 +5,7 @@ const char CSS[] PROGMEM = R"=====(
     }
 
     h2, h3, h4, p {
-      padding: 0px 0px 0px 150px;
+      padding: 0px 0px 0px 40px;
     }
 
     input[type=text], select, textarea {

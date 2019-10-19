@@ -151,9 +151,9 @@ const char ADMIN_page[] PROGMEM = R"=====(
         <label for="password">WLAN - Passwort (max. 63 Zeichen) </label>
     </div>
   </div>
+    <p>WLAN ist: <span id="id_wlanConnetion">nicht verbunden</span></p>
   </div>
   <div class="container">
-    <p>WLAN ist: <span id="id_wlanConnetion">nicht verbunden</span></p>
     <h4>AccessPoint SSID UHU / 192.168.4.1 : </h4>
   <div class="row">
     <div class="col-25">
@@ -175,12 +175,30 @@ const char ADMIN_page[] PROGMEM = R"=====(
     </div>
   </div>
   </div>
-
+<hr>
+  <div class="container">
+  <h3> Sensor-Kalibrierung</h3>
+  <div class="row">
+    <div class="col-25">
+    <button type="button" id="id_calibrate" name="cmd_calibrate" value="yes"
+      onclick="setElementValue('id_resp_calibrate', 'Kalibrierung l&auml;uft ...'); sendNameValue(this.name, this.value); getData('id_resp_calibrate');">
+      Kalibrierung</button>
+    </div>
+    <div class="col-75">
+      <label for="id_calibrate">
+        Kalibriere den Sensor (nur MPU-6050)
+     </label>
+    </div>
+  </div>
+    <h4> Sensor Status: <span id="id_resp_calibrate"> - </span></h4>
+    <p> Zur Kalibrierung muss der MPU-6050 Sensor mit der Unterseite (glatte Seite des Boards) m&ouml;glichst exakt horizontal liegen und darf sich ca. 5s nicht bewegen.
+    </p>
+  </div>
 <hr>
   <div class="container">
   <div class="row">
     <div class="col-25">
-      <button type="button" id="id_save" name="cmd_saveConfig" value="yes" onclick="sendNameValue(this.name, this.value)">
+      <button type="button" id="id_save" name="cmd_saveConfig" value="yes" onclick="sendAll(); sendNameValue(this.name, this.value)">
       Speichern</button>
     </div>
     <div class="col-75">
@@ -202,7 +220,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   </div>
   <div class="row">
     <div class="col-25">
-	    <button type="button" id="id_backToRoot" onclick="window.location.href='/'">Zur&uuml;ck</button>
+	    <button type="button" id="id_backToRoot" onclick="back()">Zur&uuml;ck</button>
     </div>
     <div class="col-75">
       <label for="id_backToRoot">
@@ -210,16 +228,40 @@ const char ADMIN_page[] PROGMEM = R"=====(
      </label>
     </div>
   </div>
+  <div class="row">
+    <div class="col-25">
+    <button type="button" id="id_mcrestart" name="cmd_mcrestart" value="yes" onclick="sendNameValue(this.name, this.value)">
+      Neustart Sensor</button>
+    </div>
+    <div class="col-75">
+      <label for="id_mcrestart">
+        Startet den Sensor neu
+     </label>
+    </div>
   </div>
-  <!--
-	<a href="/" target="_parent">
-    <button type="button">Zur&uuml;ck</button>
-  </a>: zur&uuml;ck zur Hauptseite, ohne Speichern
-  -->
+  <p>Alle &Auml;derungen wirken sich sofort aus und k&ouml;nnen mit dem &quot;Zur&uuml;ck&quot;-Button benutzt/getestet werden. Ausnahmen sind WiFi-Daten, die sich erst nach &quot;Speichern&quot; und &quot;Neustart&quot; auswirken.</p>
+  <p>Sollen Einstellungen (auch Kalibrierung) nach einem Neustart erhalten bleiben, muss auf jeden Fall &quot;Speichern&quot; geklickt werden.</p>
+  </div>
 </div>
 
   ###<SCRIPT>###
   <script>
+
+  function back() {
+    sendAll();
+    setTimeout(backToRoot, 200, );
+  }
+
+  function backToRoot() {
+    window.location.href='/';
+  }
+
+  function sendAll() {
+    sendValueForId("id_wlanSsid");
+    sendValueForId("id_wlanPasswd");
+    sendValueForId("id_apPasswd");
+  }
+
   getData(
     "id_version",
     "id_invertAngle",
@@ -229,7 +271,8 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "nm_precisionAmplitude",
     "id_wlanSsid",
     "id_apActive",
-    "id_wlanConnetion");
+    "id_wlanConnetion",
+    "id_resp_calibrate");
   </script>
   </body>
   </html>
