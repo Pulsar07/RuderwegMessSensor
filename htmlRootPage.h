@@ -27,6 +27,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     </div>
     <div class="col-75">
       <label class=measureValue for="id_angle">Ruderweg</label>
+      <br><label id="id_amplitudeCalcMethod" class=measureRemark for="id_angle">unbekannte Messmethode</label>
     </div>
   </div>
   <div class="row">
@@ -65,7 +66,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   <div class="row">
     <div class="col-25">
 	 <label class="flightphaseValue" id="id_ruddermaxlabel">
-  	 <span id="id_ruddermax">0</span>mm
+  	 <span id="id_ruddermax">0.00</span>mm
 	 </label>
     </div>
     <div class="col-75">
@@ -77,7 +78,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   <div class="row">
     <div class="col-25">
 	 <label class="flightphaseValue" id="id_ruddernulllabel">
-  	 <span id="id_ruddernull">0</span>mm
+  	 <span id="id_ruddernull">0.00</span>mm
 	 </label>
     </div>
     <div class="col-75">
@@ -89,7 +90,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   <div class="row">
     <div class="col-25">
 	 <label class="flightphaseValue" id="id_rudderminlabel">
-  	 <span id="id_ruddermin">0</span>mm
+  	 <span id="id_ruddermin">0.00</span>mm
 	 </label>
     </div>
     <div class="col-75">
@@ -117,7 +118,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     // Call a function repetatively with 2 Second interval
     getData("id_angleValue", "id_amplitudeValue", "cpx_flightphase" );
   }, 1000); //2000mSeconds update rate
-  getData("id_version", "id_rudderDepth", "id_sensortype");
+  getData("id_version", "id_rudderDepth", "id_sensortype", "id_amplitudeCalcMethod");
   </script>
   </body>
   </html>

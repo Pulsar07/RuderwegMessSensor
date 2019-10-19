@@ -127,6 +127,34 @@ const char ADMIN_page[] PROGMEM = R"=====(
       <label for="id_amplPrec_P100"> 1.0 mm-Anzeige-Genauigkeit</label>
     </div>
   </div>
+  <h4>Messverfahren Ruderausschlag:</h4>
+  <div class="row">
+    <div class="col-25">
+      <input type="radio" id="id_distance_arc" name="nm_distancetype" value="arc"
+        onchange="sendNameValue(this.name, this.value)" >
+    </div>
+    <div class="col-75">
+      <label for="id_distance_arc">Messverfahren Kreisbogen</label>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-25">
+      <input type="radio" id="id_distance_chord" name="nm_distancetype" value="chord"
+        onchange="sendNameValue(this.name, this.value)" >
+    </div>
+    <div class="col-75">
+      <label for="id_distance_chord">Messverfahren Kreissehne / Abstand der Punkte</label>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-25">
+      <input type="radio" id="id_vertical_distance" name="nm_distancetype" value="vertical_distance"
+        onchange="sendNameValue(this.name, this.value)" >
+    </div>
+    <div class="col-75">
+      <label for="id_distance_vertical">Messverfahren senkrechter Abstand (Tisch)</label>
+    </div>
+  </div>
   </div>
   <hr>
   <div class="container">
@@ -269,6 +297,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "nm_referenceAxis",
     "id_invertAmplitude",
     "nm_precisionAmplitude",
+    "nm_distancetype",
     "id_wlanSsid",
     "id_apActive",
     "id_wlanConnetion",

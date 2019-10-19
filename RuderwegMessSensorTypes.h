@@ -16,6 +16,12 @@ typedef enum {
   P100,
 } precision_t;
 
+typedef enum {
+  ARC,
+  CHORD,
+  VERTICAL_DISTANCE,
+} amplitude_calc_method_t;
+
 #define CONFIG_VERSION "RSV1"
 #define CONFIG_VERSION_L 5
 #define CONFIG_SSID_L 16
@@ -35,6 +41,7 @@ typedef struct {
   int16_t xAccelOffset;
   int16_t yAccelOffset;
   int16_t zAccelOffset;
+  amplitude_calc_method_t amplitudeCalcMethod;
 } configData_t;
 
 

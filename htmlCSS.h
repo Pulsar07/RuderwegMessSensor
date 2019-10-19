@@ -46,6 +46,10 @@ const char CSS[] PROGMEM = R"=====(
       padding: 20px;
     }
 
+    .measureRemark {
+      font-size: .5em;
+    }
+
     .measureValue, .flightphaseValue {
       font-size: 1.5em;
       font-weight:bold;

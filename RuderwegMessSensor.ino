@@ -40,7 +40,8 @@
 // V0.24 : automatic dedection of I2C ports and sensor type
 // V0.25 : added calibration of MPU6050 in admin page and add values to persitent config data
 //         after calibration the MPU6050 is accurate < 0.5° at a range of +-45°
-#define WM_VERSION "V0.25"
+// V0.26 : support for measure of rudder ampliude arc / chord / vertical distance - configurable
+#define WM_VERSION "V0.26"
 
 /**
  * \file winkelmesser.ino
@@ -219,7 +220,16 @@ double getAngle() {
 }
 
 double getAmplitude(double aAngle) {
-  return (aAngle/360*M_PI * 2 * ourRudderDepth) * ourConfig.amplitudeInversion;
+  double res;
+  if (ourConfig.amplitudeCalcMethod == CHORD) {
+    // sin (angle/2) = sin(angle/2 *M_PI/180)
+    res = sin(aAngle*M_PI/360) * 2 * ourRudderDepth * ourConfig.amplitudeInversion;
+  } else if (ourConfig.amplitudeCalcMethod == VERTICAL_DISTANCE) {
+    res =  sin(aAngle*M_PI/180) * ourRudderDepth * ourConfig.amplitudeInversion;
+  } else {
+    res =  (aAngle/180*M_PI * ourRudderDepth) * ourConfig.amplitudeInversion;
+  }
+  return res;
 }
 
 
@@ -400,6 +410,16 @@ void setDataReq() {
     }
     Serial.println("setting amplitude precision: " + String(ourConfig.amplitudePrecision));
   } else
+  if ( name == "nm_distancetype") {
+    if (value == "arc") {
+      ourConfig.amplitudeCalcMethod = ARC;
+    } else if (value == "chord") {
+      ourConfig.amplitudeCalcMethod = CHORD;
+    } else if (value == "vertical_distance") {
+      ourConfig.amplitudeCalcMethod = VERTICAL_DISTANCE;
+    }
+    Serial.println("setting calculation method : " + value + "/" + String(ourConfig.amplitudeCalcMethod));
+  } else
   if ( name == "id_wlanSsid") {
     strncpy(ourConfig.wlanSsid, value.c_str(), CONFIG_SSID_L);
     Serial.println("setting wlan ssid : " + String(ourConfig.wlanSsid));
@@ -540,6 +560,24 @@ void getDataReq() {
         result += String("id_amplPrec_P050") + "=" + "checked;";
       } else if (ourConfig.amplitudePrecision == P100) {
         result += String("id_amplPrec_P100") + "=" + "checked;";
+      }
+    } else
+    if (argName.equals("id_amplitudeCalcMethod")) {
+      if (ourConfig.amplitudeCalcMethod == ARC) {
+        result += argName + "=" + "Kreisbogen;";
+      } else if (ourConfig.amplitudeCalcMethod == CHORD) {
+        result += argName + "=" + "Kreissehne;";
+      } else if (ourConfig.amplitudeCalcMethod == VERTICAL_DISTANCE) {
+        result += argName + "=" + "senkrechter Abstand;";
+      }
+    } else
+    if (argName.equals("nm_distancetype")) {
+      if (ourConfig.amplitudeCalcMethod == ARC) {
+        result += String("id_distance_arc") + "=" + "checked;";
+      } else if (ourConfig.amplitudeCalcMethod == CHORD) {
+        result += String("id_distance_chord") + "=" + "checked;";
+      } else if (ourConfig.amplitudeCalcMethod == VERTICAL_DISTANCE) {
+        result += String("id_vertical_distance") + "=" + "checked;";
       }
     } else
     if (argName.equals("id_apActive")) {
@@ -813,7 +851,7 @@ void setOLEDData() {
 // EEPROM functions
 // =================================
 
-void showConfig(char* aContext) {
+void showConfig(const char* aContext) {
   Serial.println(aContext);
   Serial.print("cfg version         = "); Serial.println(ourConfig.version);
   Serial.print("axis                = "); Serial.println(ourConfig.axis);
@@ -828,6 +866,7 @@ void showConfig(char* aContext) {
   Serial.print("xAccelOffet         = "); Serial.println(ourConfig.xAccelOffset);
   Serial.print("yAccelOffet         = "); Serial.println(ourConfig.yAccelOffset);
   Serial.print("zAccelOffet         = "); Serial.println(ourConfig.zAccelOffset);
+  Serial.print("amplitudeCalcMethod = "); Serial.println(ourConfig.amplitudeCalcMethod);
 }
 
 void setDefautConfig() {
@@ -848,6 +887,7 @@ void setDefautConfig() {
   ourConfig.xAccelOffset = 0;
   ourConfig.yAccelOffset = 0;
   ourConfig.zAccelOffset = 0;
+  ourConfig.amplitudeCalcMethod = ARC;
   saveConfig();
 }
 
@@ -873,6 +913,9 @@ void loadConfig() {
   // config was never written to EEPROM, so set the default config data and save it to EEPROM
   if ( String(CONFIG_VERSION) != ourConfig.version ) {
     setDefautConfig();
+  }
+  if (ourConfig.amplitudeCalcMethod < 0) {
+    ourConfig.amplitudeCalcMethod = ARC;
   }
 }
 
