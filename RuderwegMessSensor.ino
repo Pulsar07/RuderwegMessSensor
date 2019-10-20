@@ -935,7 +935,7 @@ void checkHWReset(uint8_t aPin) {
     }
   }
   if (cnt == 10) {
-    Serial.print("configurtion reset by HW pin to GRD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ");
+    Serial.print("configuration reset by HW pin to GRD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ");
     // Serial.println(cnt);
     setDefaultConfig();
   }
