@@ -37,11 +37,12 @@
 // V0.23 : support for reset to default config when connecting D5 with GRD while startup
 //         support flight phase supporting measure with null, min, max values
 //         CSS based layout added
-// V0.24 : automatic dedection of I2C ports and sensor type
+// V0.24 : automatic detection of I2C ports and sensor type
 // V0.25 : added calibration of MPU6050 in admin page and add values to persitent config data
 //         after calibration the MPU6050 is accurate < 0.5° at a range of +-45°
-// V0.26 : support for measure of rudder ampliude arc / chord / vertical distance - configurable
-#define WM_VERSION "V0.26"
+// V0.26 : support for measure of rudder amplitude arc / chord / vertical distance - configurable
+// V0.27 : typos and coding bug in initialization of MPU6050
+#define WM_VERSION "V0.27"
 
 /**
  * \file winkelmesser.ino
@@ -118,7 +119,7 @@ void setup()
   loadConfig();
   showConfig("stored configuration:");
 
-  dedectSensor();
+  detectSensor();
 
   if (ourI2CAddr == MPU6050ADDR) {
      Wire.begin(ourSCL_Pin, ourSDA_Pin); //SDA, SCL
@@ -440,7 +441,7 @@ void setDataReq() {
      saveConfig();
   } else
   if (name == "cmd_resetConfig") {
-     setDefautConfig();
+     setDefaultConfig();
   } else
   if (name == "cmd_mcrestart") {
     Serial.println("resetting micro controller");
@@ -449,7 +450,7 @@ void setDataReq() {
   if (name == "cmd_calibrate") {
     if (ourI2CAddr == MPU6050ADDR) {
       Serial.println("triggering calibration");
-      triggerCalibrteMPU6050();
+      triggerCalibrateMPU6050();
     }
   }
 
@@ -671,7 +672,7 @@ void initMPU5060() {
       Serial.println("MPU6050 connection failed");
       delay(10000);
     }
-    if (isSensorCalibrated) {
+    if (isSensorCalibrated()) {
       // set stored calibration data
      mpu.setXAccelOffset(ourConfig.xAccelOffset);
      mpu.setYAccelOffset(ourConfig.yAccelOffset);
@@ -693,7 +694,7 @@ void restartESP() {
     ESP.restart();
   }
 }
-void triggerCalibrteMPU6050() {
+void triggerCalibrateMPU6050() {
   ourTriggerCalibrateMPU6050 = true;
 }
 
@@ -718,7 +719,7 @@ void doAsync() {
   restartESP();
 }
 
-void dedectSensor() {
+void detectSensor() {
 
   // supported I2C HW connections schemas
   uint8_t cableConnections[2][2] = {
@@ -869,7 +870,7 @@ void showConfig(const char* aContext) {
   Serial.print("amplitudeCalcMethod = "); Serial.println(ourConfig.amplitudeCalcMethod);
 }
 
-void setDefautConfig() {
+void setDefaultConfig() {
   Serial.println("setDefaultConfig()");
   // Reset EEPROM bytes to '0' for the length of the data structure
   showConfig("setDefaultConfig() - old data:");
@@ -912,7 +913,7 @@ void loadConfig() {
   EEPROM.end();
   // config was never written to EEPROM, so set the default config data and save it to EEPROM
   if ( String(CONFIG_VERSION) != ourConfig.version ) {
-    setDefautConfig();
+    setDefaultConfig();
   }
   if (ourConfig.amplitudeCalcMethod < 0) {
     ourConfig.amplitudeCalcMethod = ARC;
@@ -936,6 +937,6 @@ void checkHWReset(uint8_t aPin) {
   if (cnt == 10) {
     Serial.print("configurtion reset by HW pin to GRD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ");
     // Serial.println(cnt);
-    setDefautConfig();
+    setDefaultConfig();
   }
 }
