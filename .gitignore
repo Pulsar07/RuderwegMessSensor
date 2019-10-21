@@ -40,3 +40,5 @@
 myWifiSettings.h
 mySettings.h
 tmp/*
+doc/html
+doc/html/*

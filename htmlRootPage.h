@@ -59,7 +59,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     </div>
     <div class="col-75">
       <label for="cmd_flightphaseActive">
-      Misst die akutelle Nulllage, die Min- und Maxwert und zeigt sie an
+      Misst die akutelle Neutrallage, den Min- und Max-Wert und zeigt sie an
       </label>
     </div>
   </div>
@@ -77,13 +77,13 @@ const char MAIN_page[] PROGMEM = R"=====(
   </div>
   <div class="row">
     <div class="col-25">
-	 <label class="flightphaseValue" id="id_ruddernulllabel">
-  	 <span id="id_ruddernull">0.00</span>mm
+	 <label class="flightphaseValue" id="id_rudderneutrallabel">
+  	 <span id="id_rudderneutral">0.00</span>mm
 	 </label>
     </div>
     <div class="col-75">
-      <label class="flightphaseValue" for="id_ruddernulllabel">
-        Null-Wert
+      <label class="flightphaseValue" for="id_rudderneutrallabel">
+        Neutral-Wert
       </label>
     </div>
   </div>
@@ -111,7 +111,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     </div>
   </div>
   </div class="container">
-  <br><br><a href="https://so-fa.de/nh">www.so-fa.de/nh : Albatross, die Seite f&uuml;r Modellflug und Technik</a>
+  <br><br><a href="https://github.com/Pulsar07/RuderwegMessSensor">Projektseite auf GitHub</a>
   ###<SCRIPT>###
   <script>
   setInterval(function() {
