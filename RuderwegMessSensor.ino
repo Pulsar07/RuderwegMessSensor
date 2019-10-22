@@ -46,7 +46,8 @@
 // V0.29 : avoid timing problems when restart response to client is send
 // V0.30 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
 //         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
-#define WM_VERSION "V0.30"
+// V0.31 : enhancedd MPU6050 calibration
+#define WM_VERSION "V0.31"
 
 /**
  * \file RuderwegMessSensor.ino
