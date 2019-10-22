@@ -43,7 +43,8 @@
 // V0.26 : support for measure of rudder amplitude arc / chord / vertical distance - configurable
 // V0.27 : typos and coding bug in initialization of MPU6050
 // V0.28 : wording, and inline documentation
-// V0.29 : support for different I2C addresses and better MMA8451 added, refactoring of sensor initialization
+// V0.29 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
+//         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
 #define WM_VERSION "V0.29"
 
 /**
