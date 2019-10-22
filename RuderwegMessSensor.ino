@@ -48,7 +48,8 @@
 //         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
 // V0.31 : enhancedd MPU6050 calibration
 // V0.32 : assuming MM8452 if I2C address of MMA8451 is used but sensor ID is not as expected
-#define WM_VERSION "V0.32"
+// V0.33 : typo in MM8452 detection
+#define WM_VERSION "V0.33"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -798,7 +799,7 @@ void initMMA8451() {
     Serial.println(ourI2CAddr, HEX);
   } else {
     Serial.println("MMA8451 connection failed. MMA8452 assumed");
-    ourSensorTypeName="MMA-8451";
+    ourSensorTypeName="MMA-8452";
   }
   mma.setRange(MMA8451_RANGE_2_G);
 }
