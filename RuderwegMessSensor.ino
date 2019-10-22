@@ -44,7 +44,9 @@
 // V0.27 : typos and coding bug in initialization of MPU6050
 // V0.28 : wording, and inline documentation
 // V0.29 : avoid timing problems when restart response to client is send
-#define WM_VERSION "V0.29"
+// V0.30 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
+//         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
+#define WM_VERSION "V0.30"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -175,12 +177,14 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* c
 
 static configData_t ourConfig;
 
-static const uint8_t MPU6050ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
-static const uint8_t MMA8451ADDR = 0x1D; // I2C address of the MMA-8451. If AD0 pin is set to LOW, the I2C address will be 0x1C.
+static const uint8_t MPU6050ADDR1 = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
+static const uint8_t MPU6050ADDR2 = 0x69; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
+static const uint8_t MMA8451ADDR1 = 0x1C; // I2C address of the MMA-8451. If AD0 pin is set to LOW, the I2C address will be 0x1C.
+static const uint8_t MMA8451ADDR2 = 0x1D; // I2C address of the MMA-8451. If AD0 pin is set to LOW, the I2C address will be 0x1C.
 static uint8_t ourSCL_Pin;
 static uint8_t ourSDA_Pin;
 static uint8_t ourI2CAddr;
-static String ourSensorType;
+static String ourSensorTypeName;
 static boolean ourTriggerCalibrateMPU6050 = false;
 static unsigned long ourTriggerRestart = 0;
 
@@ -228,17 +232,11 @@ void setup()
 
   detectSensor();
 
-  if (ourI2CAddr == MPU6050ADDR) {
-     Wire.begin(ourSCL_Pin, ourSDA_Pin); //SDA, SCL
-     // initialize device
-     initMPU5060();
-  } else if (ourI2CAddr == MMA8451ADDR) {
-    mma = Adafruit_MMA8451();
-
-    // Adafruit_MMA8451 does not support different I2C pins ;-((
-    // mma.begin(ourSCL_Pin, ourSDA_Pin);
-    mma.begin();
-    mma.setRange(MMA8451_RANGE_2_G);
+  if (isI2C_MPU6050Addr()) {
+    Wire.begin(ourSDA_Pin, ourSCL_Pin); //SDA, SCL
+    initMPU5060();
+  } else if (isI2C_MMA8451Addr()) {
+    initMMA8451();
   }
 
   #ifdef SUPPORT_OLED
@@ -271,10 +269,10 @@ void loop()
 // =================================
 void readMotionSensor() {
 
-  if (ourI2CAddr == MPU6050ADDR ) { // read raw accel/gyro measurements from device
+  if (isI2C_MPU6050Addr()) {
     mpu.getMotion6(&ourAccelerometer_x, &ourAccelerometer_y, &ourAccelerometer_z, &gyro_x, &gyro_y, &gyro_z);
   } else
-  if (ourI2CAddr == MMA8451ADDR) {
+  if (isI2C_MMA8451Addr()) {
     mma.read();
     ourAccelerometer_x = mma.x;
     ourAccelerometer_y = mma.y;
@@ -312,19 +310,23 @@ void prepareMotionData() {
 }
 
 double getAngle() {
-  static double ourAngle = 0;
+  double theAngle = 0;
   switch (ourConfig.axis) {
     case xAxis:
-      ourAngle = ourSmoothedAngle_x;
+      theAngle = ourSmoothedAngle_x;
     break;
     case yAxis:
-      ourAngle = ourSmoothedAngle_y;
+      theAngle = ourSmoothedAngle_y;
     break;
     case zAxis:
-      ourAngle = ourSmoothedAngle_z;
+      theAngle = ourSmoothedAngle_z;
     break;
   }
-  return (ourAngle - ourTara) * ourConfig.angleInversion;
+  // support range -180 - +180, independent from tara
+  if (theAngle < (ourTara-180.0d)) {
+    theAngle = theAngle + 360.0d;
+  }
+  return (theAngle - ourTara) * ourConfig.angleInversion;
 }
 
 double getAmplitude(double aAngle) {
@@ -468,7 +470,7 @@ void setDataReq() {
     if (value == "true") {
       ourConfig.angleInversion = -1;
     } else {
-      ourConfig.angleInversion = -1;
+      ourConfig.angleInversion = 1;
     }
     Serial.println("setting angle factor: " + String(ourConfig.angleInversion));
   } else
@@ -555,7 +557,7 @@ void setDataReq() {
     triggerRestart();
   } else
   if (name == "cmd_calibrate") {
-    if (ourI2CAddr == MPU6050ADDR) {
+    if (isI2C_MPU6050Addr()) {
       Serial.println("triggering calibration");
       triggerCalibrateMPU6050();
     }
@@ -598,7 +600,7 @@ void getDataReq() {
       result += argName + "=" + WM_VERSION + ";";
     } else
     if (argName.equals("id_sensortype")) {
-      result += argName + "=" + ourSensorType + ";";
+      result += argName + "=" + ourSensorTypeName + ";";
     } else
     if (argName.equals("id_wlanSsid")) {
         result += argName + "=" + ourConfig.wlanSsid + ";";
@@ -768,27 +770,57 @@ void printMPU5060Offsets() {
    Serial.println();
 }
 
-void initMPU5060() {
+boolean isI2C_MMA8451Addr() {
+  boolean retVal = false;
+  if (ourI2CAddr == MMA8451ADDR1 || ourI2CAddr == MMA8451ADDR2 ) {
+    retVal = true;
+  }
+  return retVal;
+}
 
-   Serial.println("Initializing MPU6050 device");
-   mpu.initialize();
-   Serial.println("Testing device connections...");
-   if (mpu.testConnection()) {
-      Serial.println("MPU6050 connection successful");
-    } else {
-      Serial.println("MPU6050 connection failed");
-      delay(10000);
-    }
-    if (isSensorCalibrated()) {
-      // set stored calibration data
-     mpu.setXAccelOffset(ourConfig.xAccelOffset);
-     mpu.setYAccelOffset(ourConfig.yAccelOffset);
-     mpu.setZAccelOffset(ourConfig.zAccelOffset);
-     Serial.println("MPU6050 ist kalibriert mit folgenden Werten: ");
-     printMPU5060Offsets();
-   } else {
-     Serial.println("MPU6050 ist nicht kalibriert !!!!");
-   }
+boolean isI2C_MPU6050Addr() {
+  boolean retVal = false;
+  if (ourI2CAddr == MPU6050ADDR1 || ourI2CAddr == MPU6050ADDR2 ) {
+    retVal = true;
+  }
+  return retVal;
+}
+
+void initMMA8451() {
+  Serial.println("initializing MMA8451 device");
+  mma = Adafruit_MMA8451();
+
+  Serial.println("Testing device connections...");
+  if (mma.begin(ourSDA_Pin, ourSCL_Pin, ourI2CAddr)) {
+    Serial.print("MMA8451 connection successful at : 0x");
+    Serial.println(ourI2CAddr, HEX);
+  } else {
+    Serial.println("MMA8451 connection failed");
+  }
+  mma.setRange(MMA8451_RANGE_2_G);
+}
+
+void initMPU5060() {
+  Serial.println("Initializing MPU6050 device");
+  Serial.println("Testing device connections...");
+  mpu = MPU6050(ourI2CAddr);
+  mpu.initialize();
+  if (mpu.testConnection()) {
+    Serial.print("MPU6050 connection successful at : 0x");
+    Serial.println(ourI2CAddr, HEX);
+  } else {
+    Serial.println("MPU6050 connection failed");
+  }
+  if (isSensorCalibrated()) {
+    // set stored calibration data
+    mpu.setXAccelOffset(ourConfig.xAccelOffset);
+    mpu.setYAccelOffset(ourConfig.yAccelOffset);
+    mpu.setZAccelOffset(ourConfig.zAccelOffset);
+    Serial.println("MPU6050 ist kalibriert mit folgenden Werten: ");
+    printMPU5060Offsets();
+  } else {
+   Serial.println("MPU6050 ist nicht kalibriert !!!!");
+  }
 }
 
 void triggerRestart() {
@@ -813,7 +845,7 @@ void triggerCalibrateMPU6050() {
 }
 
 boolean isSensorCalibrated() {
-  return !(ourConfig.xAccelOffset == 0 & ourConfig.yAccelOffset == 0 & ourConfig.zAccelOffset == 0);
+  return (ourConfig.xAccelOffset != 0 || ourConfig.yAccelOffset != 0 || ourConfig.zAccelOffset != 0);
 }
 
 void calibrateMPU6050() {
@@ -862,39 +894,41 @@ void doAsync() {
 void detectSensor() {
 
   // supported I2C HW connections schemas
+  #define I2C_CONNECTIONS_SIZE 2
   uint8_t cableConnections[2][2] = {
-   {D3, D4} ,   /* SCL, SDA */
-   {D2, D1}    /* SCL, SDA */
+   {D3, D4} ,   /* SDA, SCL */
+   {D2, D1}    /* SDA, SCL */
   };
 
   // supported I2C devices / addresses
-  uint8_t I2CAddresses[2] = {
-    MPU6050ADDR, MMA8451ADDR
+  #define I2C_ADDR_SIZE 4
+  uint8_t I2CAddresses[I2C_ADDR_SIZE] = {
+    MPU6050ADDR1, MPU6050ADDR2, MMA8451ADDR1, MMA8451ADDR2,
   };
 
 
-  for (int i = 0; i < 2; i++) {
-    ourSCL_Pin = cableConnections[i][0];
-    ourSDA_Pin = cableConnections[i][1];
-    Wire.begin(ourSCL_Pin, ourSDA_Pin);
-    for (int j = 0; j<2; j++) {
+  for (int i = 0; i < I2C_CONNECTIONS_SIZE; i++) {
+    ourSDA_Pin = cableConnections[i][0];
+    ourSCL_Pin = cableConnections[i][1];
+    Wire.begin(ourSDA_Pin, ourSCL_Pin);
+    for (int j = 0; j<I2C_ADDR_SIZE; j++) {
       ourI2CAddr = I2CAddresses[j];
       Wire.beginTransmission(ourI2CAddr);
       byte result = Wire.endTransmission();
       if (result == 0){
-        if (ourI2CAddr == MPU6050ADDR) {
-          ourSensorType = "MPU-6050/GY521";
+        if (isI2C_MPU6050Addr()) {
+          ourSensorTypeName = "MPU-6050/GY521";
         }
-        if (ourI2CAddr == MMA8451ADDR) {
-          ourSensorType = "MMA-8451";
+        if (isI2C_MMA8451Addr()) {
+          ourSensorTypeName = "MMA-8451";
         }
         Serial.print("Sensor [");
-        Serial.print(ourSensorType);
+        Serial.print(ourSensorTypeName);
         Serial.print("] found at I2C pins ");
-        Serial.print(ourSCL_Pin);
-        Serial.print("/");
         Serial.print(ourSDA_Pin);
-        Serial.print(" (SCL/SDA) at address 0x");
+        Serial.print("/");
+        Serial.print(ourSCL_Pin);
+        Serial.print(" (SDA/SCL) at address 0x");
         Serial.print(ourI2CAddr, HEX);
         Serial.println();
         return;
