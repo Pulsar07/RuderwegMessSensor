@@ -43,9 +43,10 @@
 // V0.26 : support for measure of rudder amplitude arc / chord / vertical distance - configurable
 // V0.27 : typos and coding bug in initialization of MPU6050
 // V0.28 : wording, and inline documentation
-// V0.29 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
+// V0.29 : avoid timing problems when restart response to client is send
+// V0.30 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
 //         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
-#define WM_VERSION "V0.29"
+#define WM_VERSION "V0.30"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -185,7 +186,7 @@ static uint8_t ourSDA_Pin;
 static uint8_t ourI2CAddr;
 static String ourSensorTypeName;
 static boolean ourTriggerCalibrateMPU6050 = false;
-static boolean ourTriggerRestart = false;
+static unsigned long ourTriggerRestart = 0;
 
 int16_t ourAccelerometer_x, ourAccelerometer_y, ourAccelerometer_z; // variables for ourAccelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
@@ -823,13 +824,20 @@ void initMPU5060() {
 }
 
 void triggerRestart() {
-  ourTriggerRestart = true;
+  // the restart has to be delayed to avoid, that the response to the restart request is not
+  // answerd properly to the http-client. If there is no response the client, will resend the
+  // restart request ;-(
+  ourTriggerRestart = millis();
 }
 
 void restartESP() {
-  if (ourTriggerRestart) {
-    ourTriggerRestart = false;
-    ESP.restart();
+  if (ourTriggerRestart != 0) {
+    unsigned long delay = millis() - ourTriggerRestart;
+     // wait for 200ms with the restart
+    if (delay > 200) {
+      ourTriggerRestart = 0;
+      ESP.restart();
+    }
   }
 }
 void triggerCalibrateMPU6050() {
