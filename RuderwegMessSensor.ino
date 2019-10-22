@@ -46,7 +46,7 @@
 // V0.29 : avoid timing problems when restart response to client is send
 // V0.30 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
 //         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
-// V0.31 : enhancedd MPU6050 calibration
+// V0.31 : enhanced MPU6050 calibration
 #define WM_VERSION "V0.31"
 
 /**
@@ -762,12 +762,19 @@ float roundToDot5(double aValue) {
 }
 
 void printMPU5060Offsets() {
-   Serial.print("X Accel Offset: ");
+   Serial.print("Accel Offsets [X,Y,Z]: [");
    Serial.print(mpu.getXAccelOffset());
-   Serial.print(", Y Accel Offset: ");
+   Serial.print(",");
    Serial.print(mpu.getYAccelOffset());
-   Serial.print(", Z Accel Offset: ");
+   Serial.print(",");
    Serial.print(mpu.getZAccelOffset());
+   Serial.print("] X Gyro Offset [x,Y,Z]: [");
+   Serial.print(mpu.getXGyroOffset());
+   Serial.print(",");
+   Serial.print(mpu.getYGyroOffset());
+   Serial.print(",");
+   Serial.print(mpu.getZGyroOffset());
+   Serial.print("]");
    Serial.println();
 }
 
@@ -817,6 +824,9 @@ void initMPU5060() {
     mpu.setXAccelOffset(ourConfig.xAccelOffset);
     mpu.setYAccelOffset(ourConfig.yAccelOffset);
     mpu.setZAccelOffset(ourConfig.zAccelOffset);
+    mpu.setXGyroOffset(ourConfig.xGyroOffset);
+    mpu.setYGyroOffset(ourConfig.yGyroOffset);
+    mpu.setZGyroOffset(ourConfig.zGyroOffset);
     Serial.println("MPU6050 ist kalibriert mit folgenden Werten: ");
     printMPU5060Offsets();
   } else {
@@ -854,35 +864,38 @@ void calibrateMPU6050() {
     printMPU5060Offsets();
     mpu.CalibrateAccel(15);
     mpu.CalibrateGyro(15);
+    printMPU5060Offsets();
     Serial.println("\nat 1500 Readings");
     mpu.CalibrateAccel(6);
     mpu.CalibrateGyro(6);
     Serial.println("\nat 600 Readings");
-    mpu.PrintActiveOffsets();
+    printMPU5060Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("700 Total Readings");
-    mpu.PrintActiveOffsets();
+    printMPU5060Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("800 Total Readings");
-    mpu.PrintActiveOffsets();
+    printMPU5060Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("900 Total Readings");
-    mpu.PrintActiveOffsets();
+    printMPU5060Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("1000 Total Readings");
-    mpu.PrintActiveOffsets();
     printMPU5060Offsets();
     ourConfig.xAccelOffset = mpu.getXAccelOffset();
     ourConfig.yAccelOffset = mpu.getYAccelOffset();
     ourConfig.zAccelOffset = mpu.getZAccelOffset();
+    ourConfig.xGyroOffset = mpu.getXGyroOffset();
+    ourConfig.yGyroOffset = mpu.getYGyroOffset();
+    ourConfig.zGyroOffset = mpu.getZGyroOffset();
     ourTriggerCalibrateMPU6050 = false;
   }
 }

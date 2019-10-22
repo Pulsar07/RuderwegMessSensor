@@ -41,6 +41,9 @@ typedef struct {
   int16_t xAccelOffset;
   int16_t yAccelOffset;
   int16_t zAccelOffset;
+  int16_t xGyroOffset;
+  int16_t yGyroOffset;
+  int16_t zGyroOffset;
   amplitude_calc_method_t amplitudeCalcMethod;
 } configData_t;
 
