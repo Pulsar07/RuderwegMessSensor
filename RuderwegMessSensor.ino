@@ -819,11 +819,37 @@ boolean isSensorCalibrated() {
 void calibrateMPU6050() {
   if (ourTriggerCalibrateMPU6050 == true) {
     printMPU5060Offsets();
-    mpu.CalibrateAccel(16);
+    mpu.CalibrateAccel(15);
+    mpu.CalibrateGyro(15);
+    Serial.println("\nat 1500 Readings");
+    mpu.CalibrateAccel(6);
+    mpu.CalibrateGyro(6);
+    Serial.println("\nat 600 Readings");
+    mpu.PrintActiveOffsets();
+    Serial.println();
+    mpu.CalibrateAccel(1);
+    mpu.CalibrateGyro(1);
+    Serial.println("700 Total Readings");
+    mpu.PrintActiveOffsets();
+    Serial.println();
+    mpu.CalibrateAccel(1);
+    mpu.CalibrateGyro(1);
+    Serial.println("800 Total Readings");
+    mpu.PrintActiveOffsets();
+    Serial.println();
+    mpu.CalibrateAccel(1);
+    mpu.CalibrateGyro(1);
+    Serial.println("900 Total Readings");
+    mpu.PrintActiveOffsets();
+    Serial.println();
+    mpu.CalibrateAccel(1);
+    mpu.CalibrateGyro(1);
+    Serial.println("1000 Total Readings");
+    mpu.PrintActiveOffsets();
+    printMPU5060Offsets();
     ourConfig.xAccelOffset = mpu.getXAccelOffset();
     ourConfig.yAccelOffset = mpu.getYAccelOffset();
     ourConfig.zAccelOffset = mpu.getZAccelOffset();
-    printMPU5060Offsets();
     ourTriggerCalibrateMPU6050 = false;
   }
 }
