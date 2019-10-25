@@ -42,6 +42,7 @@ typedef struct {
   int16_t yAccelOffset;
   int16_t zAccelOffset;
   amplitude_calc_method_t amplitudeCalcMethod;
+  char apSsid[CONFIG_SSID_L];
 } configData_t;
 
 

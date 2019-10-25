@@ -15,6 +15,15 @@ const char MAIN_page[] PROGMEM = R"=====(
     <p>Sensortyp: &lt;<span id="id_sensortype"></span>&gt;</p>
   <div class="row">
     <div class="col-25">
+      <button type="button" id="id_tara" name="cmd_taraAngle" value="true"
+         onclick="sendNameValue(this.name, this.value)">TARA</button>
+    </div>
+    <div class="col-75">
+      <label for="id_invertAmplitude">Setzte Messwerte auf 0</label>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-25">
 	    <label class=measureValue id="id_angle">  <span id="id_angleValue">0</span>&deg;</label>
     </div>
     <div class="col-75">
@@ -27,25 +36,17 @@ const char MAIN_page[] PROGMEM = R"=====(
     </div>
     <div class="col-75">
       <label class=measureValue for="id_angle">Ruderweg</label>
-      <br><label id="id_amplitudeCalcMethod" class=measureRemark for="id_angle">unbekannte Messmethode</label>
+      <br><label  class=measureRemark for="id_angleCalcMethod">(<span type=text id="id_amplitudeCalcMethod">unbekannte Messmethode</span>)</label>
     </div>
   </div>
+ 
   <div class="row">
     <div class="col-25">
-      <button type="button" id="id_tara" name="cmd_taraAngle" value="true"
-         onclick="sendNameValue(this.name, this.value)">TARA</button>
-    </div>
-    <div class="col-75">
-      <label for="id_invertAmplitude">Setzte Messwerte auf 0</label>
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-25">
-      <input type="number" id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)"
+      <input type="number" class=measureInput id="id_rudderDepth" onchange="sendNameValue(this.id, this.value*10)"
          style="width: 6em" maxlength="3" min="5" max="150" step="1" value="0"></input>
     </div>
     <div class="col-75">
-      <label for="id_rudderDepth">Setze Rudertiefe in mm</label>
+      <label for="id_rudderDepth" class=measureValue >Setze Rudertiefe in mm</label>
     </div>
   </div>
 

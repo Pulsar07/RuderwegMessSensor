@@ -47,9 +47,10 @@
 // V0.30 : support for different I2C addresses and better support for MMA8451 added, refactoring of sensor initialization
 //         for this the Adafruit_MMA8451 library is patched and this fork [https://github.com/Pulsar07/Adafruit_MMA8451_Library] has to be used
 // V0.31 : enhancedd MPU6050 calibration
-// V0.32 : assuming MM8452 if I2C address of MMA8451 is used but sensor ID is not as expected
-// V0.33 : typo in MM8452 detection
-#define WM_VERSION "V0.33"
+// V0.32 : SMS: assuming MM8452 if I2C address of MMA8451 is used but sensor ID is not as expected
+// V0.33 : SMS: typo in MM8452 detection
+// V0.34 : JR: AP-Name now configurable
+#define WM_VERSION "V0.34"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -213,8 +214,6 @@ static float ourNullAmpl;
 static float ourMinAmpl;
 static float ourMaxAmpl;
 static boolean ourIsMeasureActive=false;
-
-const char* ap_ssid = "UHU";
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
@@ -541,6 +540,10 @@ void setDataReq() {
     strncpy(ourConfig.wlanPasswd, value.c_str(), CONFIG_PASSW_L);
     Serial.println("setting wlan password : " + String(ourConfig.wlanPasswd));
   } else
+   if ( name == "id_apSsid") {
+    strncpy(ourConfig.apSsid, value.c_str(), CONFIG_SSID_L);
+    Serial.println("setting AccessPoint ssid : " + String(ourConfig.apSsid));
+  } else
   if ( name == "id_apPasswd") {
     if (String(value).length() >= 8) {
       strncpy(ourConfig.apPasswd, value.c_str(), CONFIG_PASSW_L);
@@ -610,6 +613,9 @@ void getDataReq() {
     } else
     if (argName.equals("id_wlanPasswd")) {
         result += argName + "=" + "************;";
+    } else
+	if (argName.equals("id_apSsid")) {
+        result += argName + "=" + ourConfig.apSsid + ";";
     } else
     if (argName.equals("id_apPasswd")) {
       if (String(ourConfig.apPasswd).length() != 0) {
@@ -974,17 +980,17 @@ void setupWiFi() {
   }
   if (ourConfig.apIsActive) {
     Serial.print("Starting WiFi Access Point with  SSID: ");
-    Serial.println(ap_ssid);
+    Serial.println(ourConfig.apSsid);
     //ESP32 As access point IP: 192.168.4.1
     // WiFi.mode(WIFI_AP) ; //Access Point mode
-    boolean res = WiFi.softAP(ap_ssid, ourConfig.apPasswd);    //Password length minimum 8 char
+    boolean res = WiFi.softAP(ourConfig.apSsid, ourConfig.apPasswd);    //Password length minimum 8 char
     if(res ==true) {
       IPAddress myIP = WiFi.softAPIP();
       Serial.println("AP setup done!");
       Serial.print("Host IP Address: ");
       Serial.println(myIP);
       Serial.print("Please connect to SSID: ");
-      Serial.print(ap_ssid);
+      Serial.print(ourConfig.apSsid);
       Serial.print(", PW: ");
       Serial.print(ourConfig.apPasswd);
       Serial.println(", Address: http://192.168.4.1");
@@ -1041,6 +1047,7 @@ void showConfig(const char* aContext) {
   Serial.print("amplitudeInversion  = "); Serial.println(ourConfig.amplitudeInversion);
   Serial.print("wlanSsid            = "); Serial.println(ourConfig.wlanSsid);
   Serial.print("wlanPasswd          = "); Serial.println(ourConfig.wlanPasswd);
+  Serial.print("apSsid              = "); Serial.println(ourConfig.apSsid);
   Serial.print("apPasswd            = "); Serial.println(ourConfig.apPasswd);
   Serial.print("xAccelOffet         = "); Serial.println(ourConfig.xAccelOffset);
   Serial.print("yAccelOffet         = "); Serial.println(ourConfig.yAccelOffset);
@@ -1062,6 +1069,7 @@ void setDefaultConfig() {
   ourConfig.amplitudePrecision = P050;
   strncpy(ourConfig.wlanSsid , "", CONFIG_SSID_L);
   strncpy(ourConfig.wlanPasswd, "", CONFIG_PASSW_L);
+  strncpy(ourConfig.apSsid , "UHU", CONFIG_SSID_L);
   strncpy(ourConfig.apPasswd, "12345678", CONFIG_PASSW_L);
   ourConfig.xAccelOffset = 0;
   ourConfig.yAccelOffset = 0;

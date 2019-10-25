@@ -182,14 +182,23 @@ const char ADMIN_page[] PROGMEM = R"=====(
     <p>WLAN ist: <span id="id_wlanConnetion">nicht verbunden</span></p>
   </div>
   <div class="container">
-    <h4>AccessPoint SSID UHU / 192.168.4.1 : </h4>
+    <h4>Zugangsdaten f&uuml;r AccessPoint  / 192.168.4.1 : </h4>
   <div class="row">
     <div class="col-25">
       <input type="checkbox" id="id_apActive" name="id_apActive" value="xx"
         onchange="sendNameValue(this.id, this.checked)" >
     </div>
     <div class="col-75">
-      <label for="id_apActive"> AccessPoint mit SSID: UHU ist aktiv</label>
+      <label for="id_apActive"> AccessPoint ist aktiv</label>
+    </div>
+  </div>
+   <div class="row">
+    <div class="col-25">
+      <input type="text" id="id_apSsid" name="apssid"
+        onchange="sendNameValue(this.id, this.value)" placeholder="AccessPoint SSID">
+    </div>
+    <div class="col-75">
+      <label for="id_apSsid">AccesPoint - SSID (max. 15 Zeichen)</label>
     </div>
   </div>
   <div class="row">
@@ -299,6 +308,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
     "nm_precisionAmplitude",
     "nm_distancetype",
     "id_wlanSsid",
+	"id_apSsid",
     "id_apActive",
     "id_wlanConnetion",
     "id_resp_calibrate");
