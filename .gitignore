@@ -42,3 +42,5 @@ mySettings.h
 tmp/*
 doc/html
 doc/html/*
+libraries/*
+

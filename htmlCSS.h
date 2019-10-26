@@ -47,14 +47,19 @@ const char CSS[] PROGMEM = R"=====(
     }
 
     .measureRemark {
-      font-size: .5em;
+      font-size: .8em;
     }
 
     .measureValue, .flightphaseValue {
       font-size: 1.5em;
       font-weight:bold;
     }
-
+	
+    .measureInput {
+      font-size: 1.3em;
+      font-weight:bold;
+    }
+	
     .version {
       text-align: right;
     }
