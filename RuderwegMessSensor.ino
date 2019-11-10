@@ -13,7 +13,13 @@
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
 #include "I2Cdev.h"
+
+// #define USE_MPU6050_MPU
+#ifdef USE_MPU6050_MPU
+#include "MPU6050_6Axis_MotionApps20.h"
+#else
 #include "MPU6050.h"
+#endif
 
 // Version history
 // V0.10 : full functional initial version
@@ -50,7 +56,9 @@
 // V0.32 : assuming MM8452 if I2C address of MMA8451 is used but sensor ID is not as expected
 // V0.33 : typo in MM8452 detection
 // V0.34 : JR: AP-Name now configurable
-#define WM_VERSION "V0.34"
+// V0.35 : RS: typos, enhanced MPU6050 initialization output, and not activated code fore MPU usage (USE_MPU6050_MPU)
+//         hw reset to default config changed to D6
+#define WM_VERSION "V0.35"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -217,6 +225,16 @@ static boolean ourIsMeasureActive=false;
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
+#ifdef USE_MPU6050_MPU
+#define INTERRUPT_PIN 15 // use pin 15 on ESP8266
+bool dmpReady = false;  // set true if DMP init was successful
+uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
+uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+uint16_t fifoCount;     // count of all bytes currently in FIFO
+uint8_t fifoBuffer[64]; // FIFO storage buffer
+#endif
+
 void setup()
 {
   delay(1000);
@@ -227,7 +245,7 @@ void setup()
   Serial.println(WM_VERSION);
 
   // check HW Pin 4 for HW Reset
-  checkHWReset(D5);
+  checkHWReset(D6);
 
   loadConfig();
   showConfig("stored configuration:");
@@ -236,7 +254,7 @@ void setup()
 
   if (isI2C_MPU6050Addr()) {
     Wire.begin(ourSDA_Pin, ourSCL_Pin); //SDA, SCL
-    initMPU5060();
+    initMPU6050();
   } else if (isI2C_MMA8451Addr()) {
     initMMA8451();
   }
@@ -769,7 +787,7 @@ float roundToDot5(double aValue) {
   return round(aValue * 2)/2;
 }
 
-void printMPU5060Offsets() {
+void printMPU6050Offsets() {
    Serial.print("Accel Offsets [X,Y,Z]: [");
    Serial.print(mpu.getXAccelOffset());
    Serial.print(",");
@@ -785,6 +803,54 @@ void printMPU5060Offsets() {
    Serial.print("]");
    Serial.println();
 }
+void detectSensor() {
+
+  // supported I2C HW connection schemas
+  #define I2C_CONNECTIONS_SIZE 2
+  uint8_t cableConnections[2][2] = {
+   {D3, D4} ,   /* SDA, SCL */
+   {D2, D1}    /* SDA, SCL */
+  };
+
+  // supported I2C devices / addresses
+  #define I2C_ADDR_SIZE 4
+  uint8_t I2CAddresses[I2C_ADDR_SIZE] = {
+    MPU6050ADDR1, MPU6050ADDR2, MMA8451ADDR1, MMA8451ADDR2,
+  };
+
+
+
+  for (int i = 0; i < I2C_CONNECTIONS_SIZE; i++) {
+    ourSDA_Pin = cableConnections[i][0];
+    ourSCL_Pin = cableConnections[i][1];
+    Wire.begin(ourSDA_Pin, ourSCL_Pin);
+    for (int j = 0; j<I2C_ADDR_SIZE; j++) {
+      ourI2CAddr = I2CAddresses[j];
+      mpu = MPU6050(ourI2CAddr);
+      Wire.beginTransmission(ourI2CAddr);
+      byte result = Wire.endTransmission();
+      if (result == 0){
+        if (isI2C_MPU6050Addr()) {
+          ourSensorTypeName = "MPU-6050/GY521";
+        }
+        if (isI2C_MMA8451Addr()) {
+          ourSensorTypeName = "MMA-8451";
+        }
+        Serial.print("Sensor [");
+        Serial.print(ourSensorTypeName);
+        Serial.print("] found at I2C pins ");
+        Serial.print(ourSDA_Pin);
+        Serial.print("/");
+        Serial.print(ourSCL_Pin);
+        Serial.print(" (SDA/SCL) at address 0x");
+        Serial.print(ourI2CAddr, HEX);
+        Serial.println();
+        return;
+      }
+    }
+  }
+}
+
 
 boolean isI2C_MMA8451Addr() {
   boolean retVal = false;
@@ -806,7 +872,7 @@ void initMMA8451() {
   Serial.println("initializing MMA8451 device");
   mma = Adafruit_MMA8451();
 
-  Serial.println("Testing device connections...");
+  Serial.println("Testing MMA-8452 device connection...");
   if (mma.begin(ourSDA_Pin, ourSCL_Pin, ourI2CAddr)) {
     Serial.print("MMA8451 connection successful at : 0x");
     Serial.println(ourI2CAddr, HEX);
@@ -817,16 +883,26 @@ void initMMA8451() {
   mma.setRange(MMA8451_RANGE_2_G);
 }
 
-void initMPU5060() {
+void initMPU6050() {
+  #ifdef USE_MPU6050_MPU
+  Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
+  #endif
   Serial.println("Initializing MPU6050 device");
-  Serial.println("Testing device connections...");
+  Serial.println("Testing device connection...");
   mpu = MPU6050(ourI2CAddr);
+  Serial.println("resetting the MPU6050 device ...");
+  mpu.reset();
+  delay(50);
   mpu.initialize();
+  Serial.print("MPU6050 deviceId is: 0x");
+  Serial.println(mpu.getDeviceID(), HEX);
+  Serial.print("MPU6050 FullScaleAccelRange: ");
+  Serial.println(mpu.getFullScaleAccelRange());
   if (mpu.testConnection()) {
     Serial.print("MPU6050 connection successful at : 0x");
     Serial.println(ourI2CAddr, HEX);
   } else {
-    Serial.println("MPU6050 connection failed");
+    Serial.println("ERROR: MPU6050 connection failed");
   }
   if (isSensorCalibrated()) {
     // set stored calibration data
@@ -837,10 +913,51 @@ void initMPU5060() {
     mpu.setYGyroOffset(ourConfig.yGyroOffset);
     mpu.setZGyroOffset(ourConfig.zGyroOffset);
     Serial.println("MPU6050 ist kalibriert mit folgenden Werten: ");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
   } else {
-   Serial.println("MPU6050 ist nicht kalibriert !!!!");
+    Serial.println("MPU6050 ist nicht kalibriert !!!!");
+    Serial.println("MPU6050 hat folgende initialen Werte: ");
+    printMPU6050Offsets();
   }
+
+  #ifdef USE_MPU6050_MPU
+
+  // load and configure the DMP
+  Serial.println(F("Initializing DMP..."));
+  devStatus = mpu.dmpInitialize();
+
+  // make sure it worked (returns 0 if so)
+  if (devStatus == 0) {
+    // turn on the DMP, now that it's ready
+    Serial.println(F("Enabling DMP..."));
+    mpu.setDMPEnabled(true);
+
+    // enable Arduino interrupt detection
+    Serial.println(F("Enabling interrupt detection (Arduino external interrupt 0)..."));
+    attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
+    mpuIntStatus = mpu.getIntStatus();
+
+    // set our DMP Ready flag so the main loop() function knows it's okay to use it
+    Serial.println(F("DMP ready! Waiting for first interrupt..."));
+    dmpReady = true;
+
+    // get expected DMP packet size for later comparison
+    packetSize = mpu.dmpGetFIFOPacketSize();
+  } else {
+    // ERROR!
+    // 1 = initial memory load failed
+    // 2 = DMP configuration updates failed
+    // (if it's going to break, usually the code will be 1)
+    Serial.print(F("DMP Initialization failed (code "));
+    Serial.print(devStatus);
+    Serial.println(F(")"));
+  }
+#endif
+}
+
+volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
+ICACHE_RAM_ATTR void dmpDataReady() {
+    mpuInterrupt = true;
 }
 
 void triggerRestart() {
@@ -870,35 +987,35 @@ boolean isSensorCalibrated() {
 
 void calibrateMPU6050() {
   if (ourTriggerCalibrateMPU6050 == true) {
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     mpu.CalibrateAccel(15);
     mpu.CalibrateGyro(15);
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     Serial.println("\nat 1500 Readings");
     mpu.CalibrateAccel(6);
     mpu.CalibrateGyro(6);
     Serial.println("\nat 600 Readings");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("700 Total Readings");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("800 Total Readings");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("900 Total Readings");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     Serial.println();
     mpu.CalibrateAccel(1);
     mpu.CalibrateGyro(1);
     Serial.println("1000 Total Readings");
-    printMPU5060Offsets();
+    printMPU6050Offsets();
     ourConfig.xAccelOffset = mpu.getXAccelOffset();
     ourConfig.yAccelOffset = mpu.getYAccelOffset();
     ourConfig.zAccelOffset = mpu.getZAccelOffset();
@@ -914,52 +1031,6 @@ void doAsync() {
   restartESP();
 }
 
-void detectSensor() {
-
-  // supported I2C HW connections schemas
-  #define I2C_CONNECTIONS_SIZE 2
-  uint8_t cableConnections[2][2] = {
-   {D3, D4} ,   /* SDA, SCL */
-   {D2, D1}    /* SDA, SCL */
-  };
-
-  // supported I2C devices / addresses
-  #define I2C_ADDR_SIZE 4
-  uint8_t I2CAddresses[I2C_ADDR_SIZE] = {
-    MPU6050ADDR1, MPU6050ADDR2, MMA8451ADDR1, MMA8451ADDR2,
-  };
-
-
-  for (int i = 0; i < I2C_CONNECTIONS_SIZE; i++) {
-    ourSDA_Pin = cableConnections[i][0];
-    ourSCL_Pin = cableConnections[i][1];
-    Wire.begin(ourSDA_Pin, ourSCL_Pin);
-    for (int j = 0; j<I2C_ADDR_SIZE; j++) {
-      ourI2CAddr = I2CAddresses[j];
-      Wire.beginTransmission(ourI2CAddr);
-      byte result = Wire.endTransmission();
-      if (result == 0){
-        if (isI2C_MPU6050Addr()) {
-          ourSensorTypeName = "MPU-6050/GY521";
-        }
-        if (isI2C_MMA8451Addr()) {
-          ourSensorTypeName = "MMA-8451";
-        }
-        Serial.print("Sensor [");
-        Serial.print(ourSensorTypeName);
-        Serial.print("] found at I2C pins ");
-        Serial.print(ourSDA_Pin);
-        Serial.print("/");
-        Serial.print(ourSCL_Pin);
-        Serial.print(" (SDA/SCL) at address 0x");
-        Serial.print(ourI2CAddr, HEX);
-        Serial.println();
-        return;
-      }
-    }
-  }
-}
-
 // =================================
 // WiFi functions
 // =================================
@@ -967,6 +1038,10 @@ void detectSensor() {
 void setupWiFi() {
   // first try to connect to the stored WLAN, if this does not work try to
   // start as Access Point
+
+  // hardcode here to avoid setup by AP
+  // strncpy(ourConfig.wlanSsid , "<SSID>", CONFIG_SSID_L);
+  // strncpy(ourConfig.wlanPasswd, "<PWD>", CONFIG_PASSW_L);
 
   if (String(ourConfig.wlanSsid).length() != 0 ) {
     WiFi.mode(WIFI_STA) ; // client mode only
