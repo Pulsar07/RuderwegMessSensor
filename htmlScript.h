@@ -1,6 +1,20 @@
 const char SCRIPT[] PROGMEM = R"=====(
   <script>
 
+  function setClassElementsReadonly(aClassname, aValue) {
+    var elements = document.getElementsByClassName(aClassname);
+    console.log("found elements: " + elements.length);
+    for (var i = 0; i < elements.length; i++) {
+      var val = true;
+      if (aValue == "false") {
+        val = false;
+      } 
+      console.log("setting " + elements[i].id + " to readonly = " + val);
+      elements[i].readOnly = val;
+      elements[i].disabled = val;
+    }
+  }
+
   function setElementValue(aId, aValue) {
     var htmlElement = document.getElementById(aId);
     htmlElement.innerHTML = aValue;
@@ -28,20 +42,29 @@ const char SCRIPT[] PROGMEM = R"=====(
         aValue=document.getElementById(aId).value;
     }
     var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      parseResponse(this);
+    };
     xhttp.open("GET", "setDataReq?name="+aId+"&value="+aValue, true);
     xhttp.send();
   }
 
-  function getData() {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        var responseValues = this.responseText.split(";");
+  function parseResponse(aResponse) {
+      if (aResponse.readyState == 4 && aResponse.status == 200) {
+        var responseValues = aResponse.responseText.split(";");
+        console.log("responseValues.length:" + responseValues.length);
         for (var i = 0; i < responseValues.length; i++) {
           var element = responseValues[i].split("=");
           var elementId = element[0];
+          console.log("elementId:" + elementId);
+          if (elementId == "") { break }
           var elementValue = element[1];
+          console.log("elementValue:" + elementValue);
           var htmlElement = document.getElementById(elementId);
+          if (htmlElement == null) { 
+            console.log("element with id:" + elementId + " not found");
+            continue; 
+          }
           if (htmlElement.type == "radio") {
              htmlElement.checked = true;
           } else if (htmlElement.type == "checkbox") {
@@ -50,6 +73,14 @@ const char SCRIPT[] PROGMEM = R"=====(
             htmlElement.value = elementValue;
           } else if (htmlElement.type == "text") {
             htmlElement.value = elementValue;
+          } else if (htmlElement.type == "range") {
+            htmlElement.value = elementValue;
+            if (element.length > 3) {
+              console.log("min :" + element[2]);
+              htmlElement.min = element[2];
+              console.log("max :" + element[3]);
+              htmlElement.max = element[3];
+            }
           } else if (htmlElement.type == "number") {
             htmlElement.value = elementValue;
           } else {
@@ -57,6 +88,12 @@ const char SCRIPT[] PROGMEM = R"=====(
           }
         }
       }
+  }
+
+  function getData() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      parseResponse(this);
     };
     var requestLocation="getDataReq?";
     for (var i = 0; i < arguments.length; i++) {

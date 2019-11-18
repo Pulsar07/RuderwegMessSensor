@@ -29,23 +29,23 @@ typedef enum {
 // Types 'byte' und 'word' doesn't work!
 typedef struct {
   char version[CONFIG_VERSION_L];
+  char wlanSsid[CONFIG_SSID_L];
+  char wlanPasswd[CONFIG_PASSW_L];
+  char apSsid[CONFIG_SSID_L];
+  char apPasswd[CONFIG_PASSW_L];
+  boolean apIsActive;
   referenceAxis_t axis;
+  int angleInversion;
   precision_t anglePrecision;
   precision_t amplitudePrecision;
   int amplitudeInversion;
-  int angleInversion;
-  char wlanSsid[CONFIG_SSID_L];
-  char wlanPasswd[CONFIG_PASSW_L];
-  char apPasswd[CONFIG_PASSW_L];
-  boolean apIsActive;
+  amplitude_calc_method_t amplitudeCalcMethod;
   int16_t xAccelOffset;
   int16_t yAccelOffset;
   int16_t zAccelOffset;
   int16_t xGyroOffset;
   int16_t yGyroOffset;
   int16_t zGyroOffset;
-  amplitude_calc_method_t amplitudeCalcMethod;
-  char apSsid[CONFIG_SSID_L];
 } configData_t;
 
 

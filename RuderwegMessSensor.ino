@@ -7,6 +7,7 @@
 #include "htmlAdminPage.h"
 #include "htmlScript.h"
 #include "htmlCSS.h"
+#include "htmlCalibrateSnippet.h"
 
 #include <Adafruit_MMA8451.h>         // MMA8451 library
 
@@ -20,6 +21,7 @@
 #else
 #include "MPU6050.h"
 #endif
+// #define MPU6050_IS_PRECALIBRATED
 
 // Version history
 // V0.10 : full functional initial version
@@ -58,7 +60,10 @@
 // V0.34 : JR: AP-Name now configurable
 // V0.35 : RS: typos, enhanced MPU6050 initialization output, and not activated code fore MPU usage (USE_MPU6050_MPU)
 //         hw reset to default config changed to D6
-#define WM_VERSION "V0.35"
+// V0.36 : bug with deactivated AP and config data fixed
+//         EEPROM config structure change for better intergration of future projects
+//         added #define MPU6050_IS_PRECALIBRATED for precalibrated sensors to supress calibration config
+#define WM_VERSION "V0.36"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -458,6 +463,11 @@ void HTMLadminPage() {
   String s = FPSTR(ADMIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
   s.replace("###<CSS>###", FPSTR(CSS));
+  #ifdef MPU6050_IS_PRECALIBRATED
+  s.replace("###<MPU6050_CALIBRATE_SNIPPET>###", "");
+  #else
+  s.replace("###<MPU6050_CALIBRATE_SNIPPET>###", FPSTR(CALIBRATE));
+  #endif
   server.send(200, "text/html", s); //Send web page
 }
 
@@ -664,7 +674,11 @@ void getDataReq() {
       if ( ourTriggerCalibrateMPU6050 ) {
         result += argName + "=" + "Kalibrierung gestartet ...;";
       } else {
+     #ifdef MPU6050_IS_PRECALIBRATED
+        result += argName + "=" + "Sensor ist vorkalibriert, Kalibrierung nicht notwendig;";
+     #else
         result += argName + "=" + "Sensor ist kalibriert;";
+     #endif
       }
       }
     } else
@@ -1066,7 +1080,7 @@ void setupWiFi() {
     Serial.println(ourConfig.wlanSsid);
     WiFi.mode(WIFI_AP) ; // client mode only
   }
-  if (ourConfig.apIsActive) {
+  if (ourConfig.apIsActive || WiFi.status() != WL_CONNECTED) {
     Serial.print("Starting WiFi Access Point with  SSID: ");
     Serial.println(ourConfig.apSsid);
     //ESP32 As access point IP: 192.168.4.1
@@ -1081,7 +1095,8 @@ void setupWiFi() {
       Serial.print(ourConfig.apSsid);
       Serial.print(", PW: ");
       Serial.print(ourConfig.apPasswd);
-      Serial.println(", Address: http://192.168.4.1");
+      Serial.print(", URL: http://");
+      Serial.println(myIP);
     }
   }
 }

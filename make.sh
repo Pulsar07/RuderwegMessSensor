@@ -1,6 +1,14 @@
 #!/bin/bash
 
-USBPort=$( dmesg| grep ch341 | tail -1 | cut -d " " -f 9 )
+
+USBPort=$( dmesg| grep ch341 | tail -1 | cut -d " " -f 10 )
+if [ "${USBPort:0:3}" != "tty" ] ; then 
+  USBPort=$( dmesg| grep ch341 | tail -1 | cut -d " " -f 9 )
+fi
+
+if [ "${USBPort:0:3}" != "tty" ] ; then 
+  USBPort=""
+fi
 
 TEMP_FOLDER=/tmp/arduino_build_make
 

@@ -36,6 +36,11 @@
 *.eep
 *.elf
 *.hex
+
+# vim stuff
+*.swo
+*.swp
+
 # private stuff
 myWifiSettings.h
 mySettings.h
