@@ -7,6 +7,7 @@ const char MAIN_page[] PROGMEM = R"=====(
     <meta http-equiv="expires" content="0" /> 
     <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT" /> 
     <meta http-equiv="pragma" content="no-cache" /> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ruderweg-Messsensor</title> 
     ###<CSS>### 
   </head>
@@ -53,6 +54,21 @@ const char MAIN_page[] PROGMEM = R"=====(
     </div>
     <div class="col-75">
       <label for="id_rudderDepth" class=measureValue >Setze Rudertiefe in mm</label>
+    </div>
+  </div>
+ 
+ <hr>
+  <div class="row">
+    <div class="col-25">
+      <input type="number" id="id_targetAmplitude" onchange="sendNameValue(this.id, this.value*10)" 
+         style="width: 6em" maxlength="3" min="-100" max="100" step="1" value="5"></input>
+
+        <input type="checkbox" id="id_traceTargetAmplitude" name="traceTargetAmplitude" value="xx"
+        onchange="sendNameValue(this.id, this.checked)"  onclick="beep(1,800,10)">
+
+    </div>
+    <div class="col-75">
+      <label for="id_targetAmplitude">Setze Soll-Ruderweg [mm]</label>
     </div>
   </div>
 
@@ -124,8 +140,9 @@ const char MAIN_page[] PROGMEM = R"=====(
   setInterval(function() {
     // Call a function repetatively with 2 Second interval
     getData("id_angleValue", "id_amplitudeValue", "cpx_flightphase" );
-  }, 1000); //2000mSeconds update rate
-  getData("id_version", "id_rudderDepth", "id_sensortype", "id_amplitudeCalcMethod");
+    beepTarget();
+  }, 500); // 500mSeconds update rate
+  getData("id_version", "id_rudderDepth", "id_targetAmplitude", "id_sensortype", "id_amplitudeCalcMethod"); 
   </script>
   </body>
   </html>
