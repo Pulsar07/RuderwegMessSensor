@@ -1,6 +1,32 @@
 const char SCRIPT[] PROGMEM = R"=====(
   <script>
-
+ a=new AudioContext()
+  function beep(vol, freq, duration){
+    v=a.createOscillator()
+    u=a.createGain()
+    v.connect(u)
+    v.frequency.value=freq
+    v.type="square"
+    u.connect(a.destination)
+    u.gain.value=vol*0.01
+    v.start(a.currentTime)
+    v.stop(a.currentTime+duration*0.001)
+  }
+  
+    function beepTarget() {
+    deltaAmplitude= id_targetAmplitude.value-document.getElementById('id_amplitudeValue').innerText;
+    beepFreq = 800 + Math.sign(deltaAmplitude)*200 + deltaAmplitude*10;
+    console.log("deltaAmplitude: " + deltaAmplitude + "   beepFreq: " + beepFreq);
+    if (id_traceTargetAmplitude.checked) {
+      beep(50, beepFreq, 80);
+          console.log("dA: " + deltaAmplitude + "   bFr: " + beepFreq);
+      if (Math.abs(deltaAmplitude) < 0.2) {
+        beep(100,900,700);
+        window.navigator.vibrate([150,100,150]);
+      }
+    }
+  }
+  
   function setClassElementsReadonly(aClassname, aValue) {
     var elements = document.getElementsByClassName(aClassname);
     console.log("found elements: " + elements.length);

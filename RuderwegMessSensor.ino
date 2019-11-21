@@ -1,5 +1,6 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include "Wire.h" // This library allows you to communicate with I2C devices.
 #include "RuderwegMessSensorTypes.h"
@@ -8,6 +9,15 @@
 #include "htmlScript.h"
 #include "htmlCSS.h"
 #include "htmlCalibrateSnippet.h"
+#include <DNSServer.h>
+#include <ESP8266mDNS.h>
+
+const char *myHostname = "UHU";
+const byte DNS_PORT = 53;
+DNSServer dnsServer;
+
+#include "wifi_secrets.h" // sms WIFI
+#include <FS.h>   // SPIFFS library
 
 #include <Adafruit_MMA8451.h>         // MMA8451 library
 
@@ -63,7 +73,9 @@
 // V0.36 : bug with deactivated AP and config data fixed
 //         EEPROM config structure change for better intergration of future projects
 //         added #define MPU6050_IS_PRECALIBRATED for precalibrated sensors to supress calibration config
-#define WM_VERSION "V0.36"
+// v0.37 : Target Amplitude with audio feedback
+// v0.38 : adjustments for Smartphone screen
+#define WM_VERSION "V0.38"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -222,6 +234,7 @@ static double ourTaraGyro_x = 0;
 static double ourTaraGyro_y = 0;
 static double ourTaraGyro_z = 0;
 static double ourRudderDepth = 30;
+static double ourTargetAmplitude = 5;
 
 static float ourNullAmpl;
 static float ourMinAmpl;
@@ -275,6 +288,7 @@ void setup()
 void loop()
 {
   static unsigned long last = 0;
+  dnsServer.processNextRequest();
   server.handleClient();
 
   readMotionSensor();
@@ -485,6 +499,10 @@ void setDataReq() {
   if ( name == "cmd_taraAngle") {
     taraAngle();
   } else
+  if ( name == "id_targetAmplitude") {
+    ourTargetAmplitude = double(atoi(value.c_str()))/10;
+    Serial.println("setting targetAmplitude: " + String(ourTargetAmplitude));
+  } else
   if ( name == "cmd_flightphaseActive") {
     if (value == "true") {
       flightPhaseMeasure(true);
@@ -619,6 +637,9 @@ void getDataReq() {
     } else
     if (argName.equals("id_amplitudeValue")) {
       result += argName + "=" + String(getRudderAmplitude()) + ";";
+    } else
+    if (argName.equals("id_targetAmplitude")) {
+      result += argName + "=" + ourTargetAmplitude + ";";
     } else
     if (argName.equals("cpx_flightphase")) {
       if (ourIsMeasureActive) {
@@ -1088,6 +1109,18 @@ void setupWiFi() {
     boolean res = WiFi.softAP(ourConfig.apSsid, ourConfig.apPasswd);    //Password length minimum 8 char
     if(res ==true) {
       IPAddress myIP = WiFi.softAPIP();
+      // DNS Server
+      dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+      dnsServer.start(DNS_PORT, "*", myIP);
+
+        // mDNS
+        if (!MDNS.begin(ap_ssid)) {
+          Serial.println("Error: startup mDNS!");
+        } else {
+          Serial.println("mDNS started");
+          MDNS.addService("http", "tcp", 80);
+        }
+
       Serial.println("AP setup done!");
       Serial.print("Host IP Address: ");
       Serial.println(myIP);
