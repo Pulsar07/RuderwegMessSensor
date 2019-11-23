@@ -1,6 +1,5 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include "Wire.h" // This library allows you to communicate with I2C devices.
 #include "RuderwegMessSensorTypes.h"
@@ -15,9 +14,6 @@
 const char *myHostname = "UHU";
 const byte DNS_PORT = 53;
 DNSServer dnsServer;
-
-#include "wifi_secrets.h" // sms WIFI
-#include <FS.h>   // SPIFFS library
 
 #include <Adafruit_MMA8451.h>         // MMA8451 library
 
@@ -75,7 +71,8 @@ DNSServer dnsServer;
 //         added #define MPU6050_IS_PRECALIBRATED for precalibrated sensors to supress calibration config
 // v0.37 : Target Amplitude with audio feedback
 // v0.38 : adjustments for Smartphone screen
-#define WM_VERSION "V0.38"
+// v0.39 : bugfix: missing declaration of ap_ssid
+#define WM_VERSION "V0.39"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -240,6 +237,8 @@ static float ourNullAmpl;
 static float ourMinAmpl;
 static float ourMaxAmpl;
 static boolean ourIsMeasureActive=false;
+
+const char* ap_ssid = "UHU";
 
 ESP8266WebServer server(80);    // Server Port  hier einstellen
 
