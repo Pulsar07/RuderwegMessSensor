@@ -106,6 +106,10 @@ const char CSS[] PROGMEM = R"=====(
       h2, h3, h4, p {
         padding: 0px 0px 0px 0px;
       }
+      input[type=checkbox], input[type=radio], input[type=button] {
+	  width:2em;
+	  height:2em;
+	  }
     }
 
 .switch {
