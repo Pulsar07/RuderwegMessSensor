@@ -253,10 +253,10 @@ void setup()
   checkHWReset(D6);
 
   loadConfig();
-  showConfig("stored configuration:");
+  initConfig();
+  printConfig("stored configuration:");
 
   detectSensor();
-
   if (isI2C_MPU6050Addr()) {
     Wire.begin(ourSDA_Pin, ourSCL_Pin); //SDA, SCL
     initMPU6050();
@@ -292,6 +292,16 @@ void loop()
 // =================================
 // sensor data processing functions
 // =================================
+void initConfig() {
+  // if EEPROM config was not properly stored
+  if (ourConfig.amplitudeInversion != -1) {
+    ourConfig.amplitudeInversion = 1;
+  }
+  if (ourConfig.angleInversion != -1) {
+    ourConfig.angleInversion = 1;
+  }
+}
+
 void readMotionSensor() {
 
   if (isI2C_MPU6050Addr()) {
@@ -1139,7 +1149,7 @@ void setOLEDData() {
 // EEPROM functions
 // =================================
 
-void showConfig(const char* aContext) {
+void printConfig(const char* aContext) {
   Serial.println(aContext);
   Serial.print("cfg version         = "); Serial.println(ourConfig.version);
   Serial.print("axis                = "); Serial.println(ourConfig.axis);
@@ -1161,7 +1171,7 @@ void showConfig(const char* aContext) {
 void setDefaultConfig() {
   Serial.println("setDefaultConfig()");
   // Reset EEPROM bytes to '0' for the length of the data structure
-  showConfig("setDefaultConfig() - old data:");
+  printConfig("setDefaultConfig() - old data:");
   ourConfig.axis = xAxis;
   strncpy(ourConfig.version , CONFIG_VERSION, CONFIG_VERSION_L);
   ourConfig.axis = xAxis;
@@ -1184,14 +1194,14 @@ void setDefaultConfig() {
 
 void saveConfig() {
   Serial.println("saveConfig()");
-  showConfig("saveConfig - start");
+  printConfig("saveConfig - start");
   // Save configuration from RAM into EEPROM
   EEPROM.begin(512);
   EEPROM.put(0, ourConfig );
   delay(10);
   EEPROM.commit();                      // Only needed for ESP8266 to get data written
   EEPROM.end();                         // Free RAM copy of structure
-  showConfig("saveConfig - end");
+  printConfig("saveConfig - end");
 }
 
 void loadConfig() {

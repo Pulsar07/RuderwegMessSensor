@@ -90,8 +90,12 @@ const char CSS[] PROGMEM = R"=====(
     }
 
     /* Responsive layout - when the screen is less than 600px wide, make the two columns stack on top of each other instead of next to each other
-    */
     @media screen and (max-width: 600px) {
+    */
+    @media (max-aspect-ratio: 8/5) {
+      body {
+        background: #66f;
+      }
       .col-25, .col-75, input[type=submit] {
         width: 100%;
         margin-top: 0;
