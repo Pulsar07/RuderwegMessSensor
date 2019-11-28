@@ -8,7 +8,6 @@
 #include "htmlExpertPage.h"
 #include "htmlScript.h"
 #include "htmlCSS.h"
-#include "htmlCalibrateSnippet.h"
 #include <DNSServer.h>
 #include <ESP8266mDNS.h>
 
