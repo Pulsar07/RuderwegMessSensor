@@ -5,6 +5,7 @@
 #include "RuderwegMessSensorTypes.h"
 #include "htmlRootPage.h"
 #include "htmlAdminPage.h"
+#include "htmlExpertPage.h"
 #include "htmlScript.h"
 #include "htmlCSS.h"
 #include "htmlCalibrateSnippet.h"
@@ -27,7 +28,6 @@ DNSServer dnsServer;
 #else
 #include "MPU6050.h"
 #endif
-// #define MPU6050_IS_PRECALIBRATED
 
 // Version history
 // V0.10 : full functional initial version
@@ -72,7 +72,8 @@ DNSServer dnsServer;
 // v0.37 : Target Amplitude with audio feedback
 // v0.38 : adjustments for Smartphone screen
 // v0.39 : bugfix: missing declaration of ap_ssid
-#define WM_VERSION "V0.39"
+// V0.40 : some more fixes, offset calibration added and calibration functions moved to expert page
+#define WM_VERSION "V0.40"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -149,19 +150,24 @@ DNSServer dnsServer;
  * * Nutzung des Sensorboard GY-521 mit MPU-6050
  *  * Genauigkeit: Der MEMS Chip des MPU-6050 sollte Winkelauflösungen besser als 0.5°
  * bei 45° Ausschlag messen können, was bei einer 60mm Rudertiefe von 60mm einen Fehler von kleiner als 0.5mm ergibt.
- *  * Kalibrierung: Damit der MPU-6050 allerdings diese Genauigkeit erreicht, muss
+ * Zudem sind diverse Anzeigegenauigkeiten für die Winkel und die Ruderwegs-Messung auswählbar.
+ * Die Anzeige hat zwar immer 2 Dezimalstellen, intern wird aber gerundet.
+ *  * Experten-Einstellungen: Diese Seite wird erreicht indem man den
+ * "Einstellungen"-Button zusammen mit der CTRL-Taste clickt
+ *  ** Kalibrierung: Damit der MPU-6050 allerdings diese Genauigkeit erreicht, muss
  * er nachträglich kalibriert werden. Die Software unterstützt diese Funktion und
  * kann die Werte intern speichern. Zur Kalibrierung muss die GY-521-Sensorplatine
  * mit der flachen Rückseite möglichst exakt horizontal aufgelegt werden. Dann den
  * Kalibrier-Button drücken und ca. 5s warten bis die Kalibrierung beendet ist.
  * Dabei sollte die Auflagefläche (Tisch) nicht bewegt werden und frei von Vibrationen sein.
- *  * Einbaulage: Die Sensorplatine sollte auch genau so, wie bei der Kalibrierung,
+ *  ** Einbaulage: Die Sensorplatine sollte auch genau so, wie bei der Kalibrierung,
  * betrieben werden. Also die flache Seite nach unten und die Seite mit den
  * Elektronikbausteinen nach oben. Nur so wird die oben genannte Genauigkeit erreicht.
- *  * Achsen und Anzeige-Genauigkeit: Auf der Konfigurationsseite, kann die Bezugs-Achse
+ *  ** Achsen und Anzeige-Genauigkeit: Auf der Konfigurationsseite, kann die Bezugs-Achse
  * der Winkelmessung, je nach Einbaulage in der Klemmeinrichtung ausgewählt werden.
- * Zudem sind diverse Anzeigegenauigkeiten für die Winkel und die Ruderwegs-Messung auswählbar.
- * Die Anzeige hat zwar immer auf 2 Dezimalstellen, aber intern wird dann gerundet.
+ * ** Kalibrierungsoffset: Hier können Messwerte für +/- 45° Referenzmessungen eingebeben werden und mit der
+ * und aktiviert/deaktiviert werden, um die höchst mögliche Genauigkeit zu erreichen. Damit werden
+ * dann die Messwerte auf die Offsetwerte interpoliert.
  *
  * \subsection hmi_subsec_de_me  Messen
  * * Der mit dem Mikrokontroller verbundene Messensor sollte mit einer Klemmvorrichtung fest
@@ -313,6 +319,12 @@ void initConfig() {
   if (ourConfig.angleInversion != -1) {
     ourConfig.angleInversion = 1;
   }
+  if (String((uint8_t) ourConfig.calibrationOffsetEnabled).equals("255")) {
+    // if config is not stored before
+    ourConfig.calibrationOffsetEnabled = false;
+    ourConfig.calibrationOffsetHigh = 450;
+    ourConfig.calibrationOffsetLow = -450;
+  }
 }
 
 void readMotionSensor() {
@@ -374,7 +386,21 @@ double getAngle() {
   if (theAngle < (ourTara-180.0d)) {
     theAngle = theAngle + 360.0d;
   }
-  return (theAngle - ourTara) * ourConfig.angleInversion;
+  double angle = (theAngle - ourTara) * ourConfig.angleInversion;
+  if (ourConfig.calibrationOffsetEnabled == true) {
+    long iangle = angle*100;
+    if (iangle >= 0) {
+      long iangle = angle*100;
+      iangle = map(iangle, 0, ourConfig.calibrationOffsetHigh*10, 0, 4500);
+      angle = ((double) iangle)/100;
+    } else {
+      long iangle = angle*100;
+      iangle = map(iangle, 0, ourConfig.calibrationOffsetLow*10, 0, -4500);
+      angle = ((double) iangle)/100;
+    }
+  }
+
+  return angle;
 }
 
 double getAmplitude(double aAngle) {
@@ -463,6 +489,7 @@ void setupWebServer() {
   // react on these "pages"
   server.on("/",HTMLrootPage);
   server.on("/adminPage",HTMLadminPage);
+  server.on("/expertPage",HTMLexpertPage);
   server.on("/getDataReq",getDataReq);
   server.on("/setDataReq",setDataReq);
   server.onNotFound(handleWebRequests); //Set setver all paths are not found so we can handle as per URI
@@ -486,11 +513,15 @@ void HTMLadminPage() {
   String s = FPSTR(ADMIN_page); //Read HTML contents
   s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
   s.replace("###<CSS>###", FPSTR(CSS));
-  #ifdef MPU6050_IS_PRECALIBRATED
-  s.replace("###<MPU6050_CALIBRATE_SNIPPET>###", "");
-  #else
-  s.replace("###<MPU6050_CALIBRATE_SNIPPET>###", FPSTR(CALIBRATE));
-  #endif
+  server.send(200, "text/html", s); //Send web page
+}
+
+void HTMLexpertPage() {
+  Serial.print(server.client().remoteIP().toString());
+  Serial.println(" : HTMLexpertPage()");
+  String s = FPSTR(EXPERT_page); //Read HTML contents
+  s.replace("###<SCRIPT>###", FPSTR(SCRIPT));
+  s.replace("###<CSS>###", FPSTR(CSS));
   server.send(200, "text/html", s); //Send web page
 }
 
@@ -617,6 +648,22 @@ void setDataReq() {
     Serial.println("resetting micro controller");
     triggerRestart();
   } else
+  if ( name == "id_caloffset_enabled") {
+    if (value == "true") {
+      ourConfig.calibrationOffsetEnabled = true;
+    } else {
+      ourConfig.calibrationOffsetEnabled = false;
+    }
+    Serial.println("calibration offset enabled : " + String(ourConfig.calibrationOffsetEnabled));
+  } else
+  if (name == "id_caloffset_h") {
+    ourConfig.calibrationOffsetHigh = value.toInt();
+    Serial.println("high calibration offset: " + String(ourConfig.calibrationOffsetHigh));
+  } else
+  if (name == "id_caloffset_l") {
+    ourConfig.calibrationOffsetLow = value.toInt();
+    Serial.println("low calibration offset: " + String(ourConfig.calibrationOffsetLow));
+  } else
   if (name == "cmd_calibrate") {
     if (isI2C_MPU6050Addr()) {
       Serial.println("triggering calibration");
@@ -701,16 +748,23 @@ void getDataReq() {
       if (!isSensorCalibrated()) {
         result += argName + "=" + "Sensor ist nicht kalibriert;";
       } else {
-      if ( ourTriggerCalibrateMPU6050 ) {
-        result += argName + "=" + "Kalibrierung gestartet ...;";
-      } else {
-     #ifdef MPU6050_IS_PRECALIBRATED
-        result += argName + "=" + "Sensor ist vorkalibriert, Kalibrierung nicht notwendig;";
-     #else
-        result += argName + "=" + "Sensor ist kalibriert;";
-     #endif
+        if ( ourTriggerCalibrateMPU6050 ) {
+          result += argName + "=" + "Kalibrierung gestartet ...;";
+        } else {
+          result += argName + "=" + "Sensor ist kalibriert;";
+        }
       }
+    } else
+    if (argName.equals("id_caloffset_enabled")) {
+      if (ourConfig.calibrationOffsetEnabled == true) {
+        result += argName + "=" + "checked;";
       }
+    } else
+    if (argName.equals("id_caloffset_h")) {
+      result += argName + "=" + ((float)ourConfig.calibrationOffsetHigh)/10 + ";";
+    } else
+    if (argName.equals("id_caloffset_l")) {
+      result += argName + "=" + ((float)ourConfig.calibrationOffsetLow)/10 + ";";
     } else
     if (argName.equals("nm_referenceAxis")) {
       switch (ourConfig.axis) {
@@ -1183,21 +1237,24 @@ void setOLEDData() {
 
 void printConfig(const char* aContext) {
   Serial.println(aContext);
-  Serial.print("cfg version         = "); Serial.println(ourConfig.version);
-  Serial.print("axis                = "); Serial.println(ourConfig.axis);
-  Serial.print("amplitudePrecision  = "); Serial.println(ourConfig.amplitudePrecision);
-  Serial.print("anglePrecision      = "); Serial.println(ourConfig.anglePrecision);
-  Serial.print("apIsActive          = "); Serial.println(ourConfig.apIsActive);
-  Serial.print("angleInversion      = "); Serial.println(ourConfig.angleInversion);
-  Serial.print("amplitudeInversion  = "); Serial.println(ourConfig.amplitudeInversion);
-  Serial.print("wlanSsid            = "); Serial.println(ourConfig.wlanSsid);
-  Serial.print("wlanPasswd          = "); Serial.println(ourConfig.wlanPasswd);
-  Serial.print("apSsid              = "); Serial.println(ourConfig.apSsid);
-  Serial.print("apPasswd            = "); Serial.println(ourConfig.apPasswd);
-  Serial.print("xAccelOffet         = "); Serial.println(ourConfig.xAccelOffset);
-  Serial.print("yAccelOffet         = "); Serial.println(ourConfig.yAccelOffset);
-  Serial.print("zAccelOffet         = "); Serial.println(ourConfig.zAccelOffset);
-  Serial.print("amplitudeCalcMethod = "); Serial.println(ourConfig.amplitudeCalcMethod);
+  Serial.print("cfg version              = "); Serial.println(ourConfig.version);
+  Serial.print("axis                     = "); Serial.println(ourConfig.axis);
+  Serial.print("amplitudePrecision       = "); Serial.println(ourConfig.amplitudePrecision);
+  Serial.print("anglePrecision           = "); Serial.println(ourConfig.anglePrecision);
+  Serial.print("apIsActive               = "); Serial.println(ourConfig.apIsActive);
+  Serial.print("angleInversion           = "); Serial.println(ourConfig.angleInversion);
+  Serial.print("amplitudeInversion       = "); Serial.println(ourConfig.amplitudeInversion);
+  Serial.print("wlanSsid                 = "); Serial.println(ourConfig.wlanSsid);
+  Serial.print("wlanPasswd               = "); Serial.println(ourConfig.wlanPasswd);
+  Serial.print("apSsid                   = "); Serial.println(ourConfig.apSsid);
+  Serial.print("apPasswd                 = "); Serial.println(ourConfig.apPasswd);
+  Serial.print("xAccelOffet              = "); Serial.println(ourConfig.xAccelOffset);
+  Serial.print("yAccelOffet              = "); Serial.println(ourConfig.yAccelOffset);
+  Serial.print("zAccelOffet              = "); Serial.println(ourConfig.zAccelOffset);
+  Serial.print("amplitudeCalcMethod      = "); Serial.println(ourConfig.amplitudeCalcMethod);
+  Serial.print("calibrationOffsetEnabled = "); Serial.println(ourConfig.calibrationOffsetEnabled);
+  Serial.print("calibrationOffsetHigh    = "); Serial.println(ourConfig.calibrationOffsetHigh);
+  Serial.print("calibrationOffsetLow     = "); Serial.println(ourConfig.calibrationOffsetLow);
 }
 
 void setDefaultConfig() {
@@ -1220,6 +1277,9 @@ void setDefaultConfig() {
   ourConfig.yAccelOffset = 0;
   ourConfig.zAccelOffset = 0;
   ourConfig.amplitudeCalcMethod = ARC;
+  ourConfig.calibrationOffsetHigh = 450;
+  ourConfig.calibrationOffsetLow = -450;
+  ourConfig.calibrationOffsetEnabled = false;
   saveConfig();
 }
 

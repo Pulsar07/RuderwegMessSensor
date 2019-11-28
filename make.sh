@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# supported boards are
+#  BOARD="PRO_MINI_16MHZ"
+#  BOARD="PRO_MINI_8MHZ"
+#  BOARD="NODE_MCU_1.0"
+
+MYDIR=$(dirname $0)
+
+if [ -f $MYDIR/prj.ini ] ; then
+  source $MYDIR/prj.ini 
+fi
 
 USBPort=$( dmesg| grep ch341 | tail -1 | cut -d " " -f 10 )
 if [ "${USBPort:0:3}" != "tty" ] ; then 
@@ -28,6 +38,52 @@ function usage {
   echo "         connect: build and upload and start minicom"
   echo "         all: build and upload and start minicom"
   echo "         clean: cleanup all temp files"
+  echo "         html: create patched html files in html/ folder "
+}
+
+function compile {
+  echo "compiling for board : $BOARD"
+  if [ $BOARD =  "NODE_MCU_1.0" ] ; then
+    # /usr/share/arduino/arduino-builder -dump-prefs -logger=machine -hardware /usr/share/arduino/hardware -hardware $HOME/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools $HOME/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries $HOME/Links/stransky/dev/arduino/libraries -fqbn=esp8266:esp8266:nodemcuv2:xtal=80,vt=flash,exception=disabled,ssl=all,eesz=4M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200 -ide-version=10805 -build-path /tmp/arduino_build_422359 -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.python.path=$HOME/.arduino15/packages/esp8266/tools/python/3.7.2-post1 -prefs=runtime.tools.xtensa-lx106-elf-gcc.path=$HOME/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/2.5.0-3-20ed2b9 -prefs=runtime.tools.mkspiffs.path=$HOME/.arduino15/packages/esp8266/tools/mkspiffs/2.5.0-3-20ed2b9 -verbose $HOME/Links/stransky/dev/arduino/esp8266/KlebeTester/KlebeTester.ino
+    /usr/share/arduino/arduino-builder -compile -hardware /usr/share/arduino/hardware -hardware $HOME/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools $HOME/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries $HOME/Links/stransky/dev/arduino/libraries -fqbn=esp8266:esp8266:nodemcuv2:xtal=80,vt=flash,exception=disabled,ssl=all,eesz=4M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200 -build-path $TEMP_FOLDER -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.python.path=$HOME/.arduino15/packages/esp8266/tools/python/3.7.2-post1 -prefs=runtime.tools.xtensa-lx106-elf-gcc.path=$HOME/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/2.5.0-3-20ed2b9 -prefs=runtime.tools.mkspiffs.path=$HOME/.arduino15/packages/esp8266/tools/mkspiffs/2.5.0-3-20ed2b9 ./*.ino
+  elif [ $BOARD =  "PRO_MINI_16MHZ" ] ; then
+    /usr/share/arduino/arduino-builder -compile -hardware /usr/share/arduino/hardware -hardware $HOME/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools $HOME/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries $HOME/Links/stransky/dev/arduino/libraries -fqbn=arduino:avr:pro:cpu=16MHzatmega328 -ide-version=10805 -build-path $TEMP_FOLDER -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.avr-gcc.path=$HOME/.arduino15/packages/arduino/tools/avr-gcc/5.4.0-atmel3.6.1-arduino2 -prefs=runtime.tools.avrdude.path=$HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12 -prefs=runtime.tools.arduinoOTA.path=$HOME/.arduino15/packages/arduino/tools/arduinoOTA/1.2.0 -verbose $MYDIR/*.ino
+
+  elif [ $BOARD =  "PRO_MINI_8MHZ" ] ; then
+    /usr/share/arduino/arduino-builder -compile -hardware /usr/share/arduino/hardware -hardware $HOME/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools $HOME/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries $HOME/Links/stransky/dev/arduino/libraries -fqbn=arduino:avr:pro:cpu=8MHzatmega328 -ide-version=10805 -build-path $TEMP_FOLDER -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.avr-gcc.path=$HOME/.arduino15/packages/arduino/tools/avr-gcc/5.4.0-atmel3.6.1-arduino2 -prefs=runtime.tools.avrdude.path=$HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12 -prefs=runtime.tools.arduinoOTA.path=$HOME/.arduino15/packages/arduino/tools/arduinoOTA/1.2.0 -verbose $MYDIR/*.ino
+  fi
+}
+
+function upload {
+  if [ $BOARD =  "NODE_MCU_1.0" ] ; then
+    $HOME/.arduino15/packages/esp8266/tools/python/3.7.2-post1/python $HOME/.arduino15/packages/esp8266/hardware/esp8266/2.5.2/tools/upload.py --chip esp8266 --port /dev/$USBPort --baud 115200 --trace version --end --chip esp8266 --port /dev/$USBPort --baud 115200  write_flash 0x0 $TEMP_FOLDER/*.ino.bin --end
+  elif [ $BOARD =  "PRO_MINI_16MHZ" ] ; then
+    $HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12/bin/avrdude -C$HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12/etc/avrdude.conf -v -V -patmega328p -carduino -P/dev/$USBPort -b57600 -D -Uflash:w:$TEMP_FOLDER/*.ino.hex:i
+
+  elif [ $BOARD =  "PRO_MINI_8MHZ" ] ; then
+    $HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12/bin/avrdude -C$HOME/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino12/etc/avrdude.conf -v -V -patmega328p -carduino -P/dev/$USBPort -b57600 -D -Uflash:w:$TEMP_FOLDER/*.ino.hex:i
+  fi
+}
+
+function createHTML {
+
+  for file in $htmlPages ; do
+    mkdir -p $MYDIR/html
+    HTMLFILE="html/${file%.h}.html"
+    echo "$file -> $HTMLFILE"
+    head -n -1 $file | tail -n +2 >$HTMLFILE
+
+    head -n -1 htmlScript.h | tail -n +2 >html/.htmlScript
+    head -n -1 htmlCSS.h | tail -n +2 >html/.htmlCSS
+
+    sed -i '/###<SCRIPT>###/r html/.htmlScript' $HTMLFILE
+    sed -i '/###<SCRIPT>###/d' $HTMLFILE
+
+    sed -i '/###<CSS>###/r html/.htmlCSS' $HTMLFILE
+    sed -i '/###<CSS>###/d' $HTMLFILE
+
+  done
+
 }
 
 DO_BUILD=1
@@ -61,6 +117,11 @@ elif [ $# -eq 1 ] ; then
     echo "cleanup temporary files"
     DOIT=10
   fi
+  if [ "$1" = "html" ] ; then	
+    echo "creating html files ..."
+    createHTML
+    exit 0
+  fi
 fi
 
 
@@ -91,8 +152,7 @@ fi
 
 
 if [ $DOIT -gt 0 ] ; then
-# /usr/share/arduino/arduino-builder -dump-prefs -logger=machine -hardware /usr/share/arduino/hardware -hardware /home/stransky/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools /home/stransky/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries /home/stransky/Links/stransky/dev/arduino/libraries -fqbn=esp8266:esp8266:nodemcuv2:xtal=80,vt=flash,exception=disabled,ssl=all,eesz=4M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200 -ide-version=10805 -build-path /tmp/arduino_build_422359 -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.python.path=/home/stransky/.arduino15/packages/esp8266/tools/python/3.7.2-post1 -prefs=runtime.tools.xtensa-lx106-elf-gcc.path=/home/stransky/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/2.5.0-3-20ed2b9 -prefs=runtime.tools.mkspiffs.path=/home/stransky/.arduino15/packages/esp8266/tools/mkspiffs/2.5.0-3-20ed2b9 -verbose /home/stransky/Links/stransky/dev/arduino/esp8266/KlebeTester/KlebeTester.ino
-/usr/share/arduino/arduino-builder -compile -hardware /usr/share/arduino/hardware -hardware /home/stransky/.arduino15/packages -tools /usr/share/arduino/tools-builder -tools /home/stransky/.arduino15/packages -built-in-libraries /usr/share/arduino/libraries -libraries /home/stransky/Links/stransky/dev/arduino/libraries -fqbn=esp8266:esp8266:nodemcuv2:xtal=80,vt=flash,exception=disabled,ssl=all,eesz=4M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200 -build-path $TEMP_FOLDER -warnings=default -prefs=build.warn_data_percentage=75 -prefs=runtime.tools.python.path=/home/stransky/.arduino15/packages/esp8266/tools/python/3.7.2-post1 -prefs=runtime.tools.xtensa-lx106-elf-gcc.path=/home/stransky/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/2.5.0-3-20ed2b9 -prefs=runtime.tools.mkspiffs.path=/home/stransky/.arduino15/packages/esp8266/tools/mkspiffs/2.5.0-3-20ed2b9 ./*.ino
+  compile 
   if [ $? -ne 0 ] ; then
     echo "result : $?"
     exit -1;
@@ -100,8 +160,7 @@ if [ $DOIT -gt 0 ] ; then
 fi
 
 if [ $DOIT -gt 1 ] ; then
-
-/home/stransky/.arduino15/packages/esp8266/tools/python/3.7.2-post1/python /home/stransky/.arduino15/packages/esp8266/hardware/esp8266/2.5.2/tools/upload.py --chip esp8266 --port /dev/$USBPort --baud 115200 --trace version --end --chip esp8266 --port /dev/$USBPort --baud 115200  write_flash 0x0 $TEMP_FOLDER/*.ino.bin --end
+  upload 
   if [ $? -ne 0 ] ; then
     echo "result : $?"
     exit -1;

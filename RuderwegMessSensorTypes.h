@@ -46,6 +46,9 @@ typedef struct {
   int16_t xGyroOffset;
   int16_t yGyroOffset;
   int16_t zGyroOffset;
+  int16_t calibrationOffsetHigh;
+  int16_t calibrationOffsetLow;
+  boolean calibrationOffsetEnabled;
 } configData_t;
 
 

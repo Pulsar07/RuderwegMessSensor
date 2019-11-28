@@ -2,6 +2,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   <!DOCTYPE html>
   <html>
   <head> 
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta http-equiv="cache-control" content="no-cache, must-revalidate, post-check=0, pre-check=0" /> 
     <meta http-equiv="cache-control" content="max-age=0" /> 
     <meta http-equiv="expires" content="0" /> 
@@ -125,7 +126,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   <hr>
   <div class="row">
     <div class="col-25">
-      <button type="button" id="id_settings" onclick="window.location.href='/adminPage'">Einstellungen &auml;ndern</button>
+      <button type="button" id="id_settings" onclick="buttonClick();">Einstellungen &auml;ndern</button>
     </div>
     <div class="col-75">
       <label for="id_settings">
@@ -137,6 +138,15 @@ const char MAIN_page[] PROGMEM = R"=====(
   <br><br><a href="https://github.com/Pulsar07/RuderwegMessSensor">Projektseite auf GitHub</a>
   ###<SCRIPT>###
   <script>
+
+  function buttonClick() {
+   if (window.event.ctrlKey) {
+    window.location.href='/expertPage';
+   } else {
+    window.location.href='/adminPage';
+   }
+  }
+
   setInterval(function() {
     // Call a function repetatively with 2 Second interval
     getData("id_angleValue", "id_amplitudeValue", "cpx_flightphase" );

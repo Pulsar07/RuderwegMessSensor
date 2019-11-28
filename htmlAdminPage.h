@@ -2,6 +2,7 @@ const char ADMIN_page[] PROGMEM = R"=====(
   <!DOCTYPE html>
   <html>
   <head> 
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta http-equiv="cache-control" content="no-cache, must-revalidate, post-check=0, pre-check=0" /> 
     <meta http-equiv="cache-control" content="max-age=0" /> 
     <meta http-equiv="expires" content="0" /> 
@@ -219,7 +220,6 @@ const char ADMIN_page[] PROGMEM = R"=====(
     </div>
   </div>
   </div>
-###<MPU6050_CALIBRATE_SNIPPET>###
 <hr>
   <div class="container">
   <div class="row">
