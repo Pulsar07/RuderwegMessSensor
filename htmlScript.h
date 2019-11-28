@@ -12,7 +12,7 @@ const char SCRIPT[] PROGMEM = R"=====(
     v.start(a.currentTime)
     v.stop(a.currentTime+duration*0.001)
   }
-  
+
     function beepTarget() {
     deltaAmplitude= id_targetAmplitude.value-document.getElementById('id_amplitudeValue').innerText;
     beepFreq = 800 + Math.sign(deltaAmplitude)*200 + deltaAmplitude*10;
@@ -26,7 +26,7 @@ const char SCRIPT[] PROGMEM = R"=====(
       }
     }
   }
-  
+
   function setClassElementsReadonly(aClassname, aValue) {
     var elements = document.getElementsByClassName(aClassname);
     console.log("found elements: " + elements.length);
@@ -34,7 +34,7 @@ const char SCRIPT[] PROGMEM = R"=====(
       var val = true;
       if (aValue == "false") {
         val = false;
-      } 
+      }
       console.log("setting " + elements[i].id + " to readonly = " + val);
       elements[i].readOnly = val;
       elements[i].disabled = val;
@@ -87,14 +87,18 @@ const char SCRIPT[] PROGMEM = R"=====(
           var elementValue = element[1];
           console.log("elementValue:" + elementValue);
           var htmlElement = document.getElementById(elementId);
-          if (htmlElement == null) { 
+          if (htmlElement == null) {
             console.log("element with id:" + elementId + " not found");
-            continue; 
+            continue;
           }
           if (htmlElement.type == "radio") {
              htmlElement.checked = true;
           } else if (htmlElement.type == "checkbox") {
-             htmlElement.checked = true;
+	           if (elementValue == "checked") {
+               htmlElement.checked = true;
+	            } else {
+               htmlElement.checked = false;
+	            }
           } else if (htmlElement.type == "password") {
             htmlElement.value = elementValue;
           } else if (htmlElement.type == "text") {

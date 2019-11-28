@@ -73,7 +73,8 @@ DNSServer dnsServer;
 // v0.38 : adjustments for Smartphone screen
 // v0.39 : bugfix: missing declaration of ap_ssid
 // V0.40 : some more fixes, offset calibration added and calibration functions moved to expert page
-#define WM_VERSION "V0.40"
+// V0.41 : fix for responsiveness of checkbox in html pages
+#define WM_VERSION "V0.41"
 
 /**
  * \file RuderwegMessSensor.ino
@@ -730,11 +731,15 @@ void getDataReq() {
     if (argName.equals("id_invertAngle")) {
       if (ourConfig.angleInversion == -1) {
         result += argName + "=" + "checked;";
+      } else {
+        result += argName + "=" + "unchecked;";
       }
     } else
     if (argName.equals("id_invertAmplitude")) {
       if (ourConfig.amplitudeInversion == -1) {
         result += argName + "=" + "checked;";
+      } else {
+        result += argName + "=" + "unchecked;";
       }
     } else
     if (argName.equals("id_wlanConnetion")) {
@@ -758,6 +763,8 @@ void getDataReq() {
     if (argName.equals("id_caloffset_enabled")) {
       if (ourConfig.calibrationOffsetEnabled == true) {
         result += argName + "=" + "checked;";
+      } else {
+        result += argName + "=" + "unchecked;";
       }
     } else
     if (argName.equals("id_caloffset_h")) {
@@ -818,6 +825,8 @@ void getDataReq() {
     if (argName.equals("id_apActive")) {
       if (ourConfig.apIsActive == true) {
         result += argName + "=" + "checked;";
+      } else {
+        result += argName + "=" + "unchecked;";
       }
     }
   }
