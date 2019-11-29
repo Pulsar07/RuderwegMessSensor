@@ -107,26 +107,28 @@ werden kann.
         und die Ruderwegs-Messung auswählbar. Die Anzeige hat zwar immer
         2 Dezimalstellen, intern wird aber gerundet.
       - Experten-Einstellungen: Diese Seite wird erreicht indem man den
-        "Einstellungen"-Button zusammen mit der CTRL-Taste clickt \*\*
-        Kalibrierung: Damit der MPU-6050 allerdings diese Genauigkeit
-        erreicht, muss er nachträglich kalibriert werden. Die Software
-        unterstützt diese Funktion und kann die Werte intern speichern.
-        Zur Kalibrierung muss die GY-521-Sensorplatine mit der flachen
-        Rückseite möglichst exakt horizontal aufgelegt werden. Dann den
-        Kalibrier-Button drücken und ca. 5s warten bis die Kalibrierung
-        beendet ist. Dabei sollte die Auflagefläche (Tisch) nicht bewegt
-        werden und frei von Vibrationen sein. \*\* Einbaulage: Die
-        Sensorplatine sollte auch genau so, wie bei der Kalibrierung,
-        betrieben werden. Also die flache Seite nach unten und die Seite
-        mit den Elektronikbausteinen nach oben. Nur so wird die oben
-        genannte Genauigkeit erreicht. \*\* Achsen und
-        Anzeige-Genauigkeit: Auf der Konfigurationsseite, kann die
-        Bezugs-Achse der Winkelmessung, je nach Einbaulage in der
-        Klemmeinrichtung ausgewählt werden. \*\* Kalibrierungsoffset:
-        Hier können Messwerte für +/- 45° Referenzmessungen eingebeben
-        werden und mit der und aktiviert/deaktiviert werden, um die
-        höchst mögliche Genauigkeit zu erreichen. Damit werden dann die
-        Messwerte auf die Offsetwerte interpoliert.
+        "Einstellungen"-Button zusammen mit der CTRL-Taste clickt
+          - Kalibrierung: Damit der MPU-6050 allerdings diese
+            Genauigkeit erreicht, muss er nachträglich kalibriert
+            werden. Die Software unterstützt diese Funktion und kann die
+            Werte intern speichern. Zur Kalibrierung muss die
+            GY-521-Sensorplatine mit der flachen Rückseite möglichst
+            exakt horizontal aufgelegt werden. Dann den Kalibrier-Button
+            drücken und ca. 5s warten bis die Kalibrierung beendet ist.
+            Dabei sollte die Auflagefläche (Tisch) nicht bewegt werden
+            und frei von Vibrationen sein.
+          - Einbaulage: Die Sensorplatine sollte auch genau so, wie bei
+            der Kalibrierung, betrieben werden. Also die flache Seite
+            nach unten und die Seite mit den Elektronikbausteinen nach
+            oben. Nur so wird die oben genannte Genauigkeit erreicht.
+          - Achsen und Anzeige-Genauigkeit: Auf der Konfigurationsseite,
+            kann die Bezugs-Achse der Winkelmessung, je nach Einbaulage
+            in der Klemmeinrichtung ausgewählt werden.
+          - Kalibrierungsoffset: Hier können Messwerte für +/- 45°
+            Referenzmessungen eingebeben werden und mit der und
+            aktiviert/deaktiviert werden, um die höchst mögliche
+            Genauigkeit zu erreichen. Damit werden dann die Messwerte
+            auf die Offsetwerte interpoliert.
 
 ## <span id="hmi_subsec_de_me" class="anchor"></span> Messen
 
