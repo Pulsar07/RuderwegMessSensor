@@ -39,6 +39,22 @@ function usage {
   echo "         all: build and upload and start minicom"
   echo "         clean: cleanup all temp files"
   echo "         html: create patched html files in html/ folder "
+  echo "         readme: create the README.md file by using doxygen "
+}
+
+function createREADME {
+  cd doc
+  doxygen Doxyfile
+  TEMP_FILE=$( mktemp )
+
+  pandoc --write=gfm -i html/index.html -o $TEMP_FILE
+  BEGIN=$( grep -n 'class="PageDoc"' $TEMP_FILE )
+  BEGIN=${BEGIN%%:*}
+  BEGIN=$(( BEGIN - 1))
+
+  tail --lines=+${BEGIN} $TEMP_FILE  > ../README.md
+  rm $TEMP_FILE
+  cd ..
 }
 
 function compile {
@@ -120,6 +136,11 @@ elif [ $# -eq 1 ] ; then
   if [ "$1" = "html" ] ; then	
     echo "creating html files ..."
     createHTML
+    exit 0
+  fi
+  if [ "$1" = "readme" ] ; then	
+    echo "creating README.md file ..."
+    createREADME
     exit 0
   fi
 fi
